@@ -18,6 +18,15 @@ bin/
 run/
 *.log
 
+# Fabric API JAR extraction artifacts (from loom/remapping)
+LICENSE-fabric-*
+META-INF/
+assets/
+net/
+fabric-*.mixins.json
+fabric-*.accesswidener
+/fabric.mod.json
+
 # OS
 .DS_Store
 Thumbs.db

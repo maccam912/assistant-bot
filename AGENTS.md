@@ -59,3 +59,6 @@ Output jar: `build/libs/assistant-bot-0.1.0.jar`
 
 Architecture inspired by [third-principles-bot](../third-principles-bot/) — a Rust/azalea
 Minecraft bot with a similar BotMode enum, tick loop, and interrupt-via-boxing pattern.
+
+### Important Notes
+- Always use the internet for find examples or docs instead of decompiling or digging into library code locally. It's better to see how it's supposed to be done or how it has been done first. Ask the user before digging in to the source code of dependencies or decompiling stuff.
