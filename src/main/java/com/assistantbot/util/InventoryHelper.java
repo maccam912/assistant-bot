@@ -1,6 +1,6 @@
 package com.assistantbot.util;
 
-import net.fabricmc.fabric.api.entity.FakePlayer;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.Inventory;
@@ -13,7 +13,7 @@ import net.minecraft.item.*;
 public final class InventoryHelper {
     private InventoryHelper() {}
 
-    public static void equipBestTool(FakePlayer player, BlockState targetBlock) {
+    public static void equipBestTool(ServerPlayerEntity player, BlockState targetBlock) {
         PlayerInventory inv = player.getInventory();
         int bestSlot = -1;
         float bestSpeed = 1.0f;
@@ -34,7 +34,7 @@ public final class InventoryHelper {
         }
     }
 
-    public static void equipBestWeapon(FakePlayer player) {
+    public static void equipBestWeapon(ServerPlayerEntity player) {
         PlayerInventory inv = player.getInventory();
         int bestSlot = -1;
         int bestPriority = 0;
@@ -62,7 +62,7 @@ public final class InventoryHelper {
         }
     }
 
-    public static boolean equipItem(FakePlayer player, Item targetItem) {
+    public static boolean equipItem(ServerPlayerEntity player, Item targetItem) {
         PlayerInventory inv = player.getInventory();
 
         for (int i = 0; i < inv.size(); i++) {
@@ -75,7 +75,7 @@ public final class InventoryHelper {
         return false;
     }
 
-    public static int countItem(FakePlayer player, Item targetItem) {
+    public static int countItem(ServerPlayerEntity player, Item targetItem) {
         PlayerInventory inv = player.getInventory();
         int count = 0;
         for (int i = 0; i < inv.size(); i++) {
@@ -87,7 +87,7 @@ public final class InventoryHelper {
         return count;
     }
 
-    public static void depositAll(FakePlayer player, Inventory container) {
+    public static void depositAll(ServerPlayerEntity player, Inventory container) {
         PlayerInventory playerInv = player.getInventory();
 
         for (int playerSlot = 0; playerSlot < playerInv.size(); playerSlot++) {

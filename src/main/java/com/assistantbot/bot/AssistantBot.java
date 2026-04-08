@@ -6,7 +6,6 @@ import com.assistantbot.task.CombatTask;
 import com.assistantbot.task.IdleTask;
 import com.assistantbot.task.TickResult;
 import com.mojang.authlib.GameProfile;
-import net.fabricmc.fabric.api.entity.FakePlayer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
@@ -15,7 +14,7 @@ import net.minecraft.util.math.Vec3d;
 import java.util.UUID;
 
 /**
- * Core bot class wrapping a FakePlayer. Owns the state machine that drives
+ * Core bot class wrapping a BotPlayer. Owns the state machine that drives
  * tick-by-tick behavior. Inspired by third-principles-bot's mode/interrupt
  * architecture: the current task is the source of truth, combat interrupts
  * save/restore the previous task via boxing.
@@ -25,7 +24,7 @@ public class AssistantBot {
     private final String ownerName;
     private final UUID botUuid;
     private ServerWorld world;
-    private FakePlayer fakePlayer;
+    private BotPlayer botPlayer;
 
     private BotTask currentTask;
     private BotTask savedTask; // saved during combat interrupt, restored after
@@ -38,22 +37,22 @@ public class AssistantBot {
         this.world = (ServerWorld) owner.getEntityWorld();
 
         GameProfile profile = new GameProfile(botUuid, "[Bot] " + ownerName);
-        this.fakePlayer = FakePlayer.get(world, profile);
+        this.botPlayer = new BotPlayer(world.getServer(), world, profile);
 
         Vec3d ownerPos = owner.getEntityPos();
-        this.fakePlayer.refreshPositionAndAngles(
+        this.botPlayer.spawn(
                 ownerPos.x + 1, ownerPos.y, ownerPos.z + 1,
                 owner.getYaw(), owner.getPitch()
         );
 
         this.currentTask = new IdleTask();
-        this.lastKnownHealth = fakePlayer.getHealth();
+        this.lastKnownHealth = botPlayer.getHealth();
 
-        AssistantMod.LOGGER.info("Assistant bot spawned for {} at {}", ownerName, fakePlayer.getBlockPos());
+        AssistantMod.LOGGER.info("Assistant bot spawned for {} at {}", ownerName, botPlayer.getBlockPos());
     }
 
     public void tick() {
-        if (fakePlayer == null || world == null) return;
+        if (botPlayer == null || world == null) return;
 
         checkCombatInterrupt();
 
@@ -65,11 +64,11 @@ public class AssistantBot {
             case FAILED -> onTaskFailed();
         }
 
-        lastKnownHealth = fakePlayer.getHealth();
+        lastKnownHealth = botPlayer.getHealth();
     }
 
     private void checkCombatInterrupt() {
-        float currentHealth = fakePlayer.getHealth();
+        float currentHealth = botPlayer.getHealth();
         if (currentHealth < lastKnownHealth && !(currentTask instanceof CombatTask)) {
             savedTask = currentTask;
             currentTask = new CombatTask();
@@ -110,14 +109,17 @@ public class AssistantBot {
         if (currentTask != null) {
             currentTask.onStop(this);
         }
-        fakePlayer = null;
+        if (botPlayer != null) {
+            botPlayer.despawn();
+        }
+        botPlayer = null;
         world = null;
         AssistantMod.LOGGER.info("Assistant bot for {} destroyed", ownerName);
     }
 
     // --- Accessors ---
 
-    public FakePlayer getFakePlayer() { return fakePlayer; }
+    public ServerPlayerEntity getFakePlayer() { return botPlayer; }
     public ServerWorld getWorld() { return world; }
     public UUID getOwnerUuid() { return ownerUuid; }
     public String getOwnerName() { return ownerName; }
@@ -127,8 +129,8 @@ public class AssistantBot {
         return world.getServer().getPlayerManager().getPlayer(ownerUuid);
     }
 
-    public Vec3d getPos() { return fakePlayer.getEntityPos(); }
-    public BlockPos getBlockPos() { return fakePlayer.getBlockPos(); }
+    public Vec3d getPos() { return botPlayer.getEntityPos(); }
+    public BlockPos getBlockPos() { return botPlayer.getBlockPos(); }
 
     public String getStatusString() {
         return currentTask.getStatusString();

@@ -1,6 +1,6 @@
 package com.assistantbot.util;
 
-import net.fabricmc.fabric.api.entity.FakePlayer;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
@@ -10,7 +10,7 @@ import net.minecraft.util.math.Vec3d;
 public final class LookHelper {
     private LookHelper() {}
 
-    public static void lookAt(FakePlayer player, Vec3d target) {
+    public static void lookAt(ServerPlayerEntity player, Vec3d target) {
         Vec3d eyePos = player.getEyePos();
         double dx = target.x - eyePos.x;
         double dy = target.y - eyePos.y;

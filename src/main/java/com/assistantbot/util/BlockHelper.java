@@ -1,7 +1,7 @@
 package com.assistantbot.util;
 
 import com.assistantbot.bot.AssistantBot;
-import net.fabricmc.fabric.api.entity.FakePlayer;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.block.BlockState;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
@@ -24,7 +24,7 @@ public final class BlockHelper {
 
     public static boolean breakBlock(AssistantBot bot, BlockPos pos) {
         ServerWorld world = bot.getWorld();
-        FakePlayer player = bot.getFakePlayer();
+        ServerPlayerEntity player = bot.getFakePlayer();
 
         BlockState state = world.getBlockState(pos);
         if (state.isAir()) return false;
@@ -41,7 +41,7 @@ public final class BlockHelper {
     }
 
     public static boolean placeBlock(AssistantBot bot, BlockPos pos) {
-        FakePlayer player = bot.getFakePlayer();
+        ServerPlayerEntity player = bot.getFakePlayer();
         ItemStack heldItem = player.getMainHandStack();
 
         if (heldItem.isEmpty() || !(heldItem.getItem() instanceof BlockItem)) {
@@ -64,7 +64,7 @@ public final class BlockHelper {
         return result.isAccepted();
     }
 
-    public static int calculateBreakTicks(FakePlayer player, BlockState state, float hardness) {
+    public static int calculateBreakTicks(ServerPlayerEntity player, BlockState state, float hardness) {
         if (hardness < 0) return Integer.MAX_VALUE; // unbreakable
         if (hardness == 0) return 1;
 

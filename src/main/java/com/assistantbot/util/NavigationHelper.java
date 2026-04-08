@@ -1,7 +1,7 @@
 package com.assistantbot.util;
 
 import com.assistantbot.bot.AssistantBot;
-import net.fabricmc.fabric.api.entity.FakePlayer;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.entity.MovementType;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
@@ -20,7 +20,7 @@ public final class NavigationHelper {
     private NavigationHelper() {}
 
     public static void moveToward(AssistantBot bot, Vec3d target, double speed) {
-        FakePlayer player = bot.getFakePlayer();
+        ServerPlayerEntity player = bot.getFakePlayer();
         Vec3d currentPos = player.getEntityPos();
 
         double dx = target.x - currentPos.x;
@@ -41,7 +41,7 @@ public final class NavigationHelper {
     }
 
     public static void teleportNear(AssistantBot bot, Vec3d target) {
-        FakePlayer player = bot.getFakePlayer();
+        ServerPlayerEntity player = bot.getFakePlayer();
         double angle = Math.random() * Math.PI * 2;
         player.refreshPositionAndAngles(
                 target.x + Math.cos(angle) * 2,
@@ -56,7 +56,7 @@ public final class NavigationHelper {
     }
 
     private static boolean shouldJump(AssistantBot bot, double moveX, double moveZ) {
-        FakePlayer player = bot.getFakePlayer();
+        ServerPlayerEntity player = bot.getFakePlayer();
         if (!player.isOnGround()) return false;
 
         Vec3d pos = player.getEntityPos();
