@@ -52,6 +52,7 @@ public class MineTask implements BotTask {
         double distance = bot.getPos().distanceTo(targetCenter);
 
         if (distance <= BlockHelper.REACH_DISTANCE) {
+            NavigationHelper.stopMoving(bot);
             phase = MinePhase.EQUIPPING;
             return TickResult.CONTINUE;
         }

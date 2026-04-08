@@ -26,11 +26,13 @@ public class FollowTask implements BotTask {
         double distance = botPos.distanceTo(ownerPos);
 
         if (distance > TOO_FAR_DISTANCE) {
+            NavigationHelper.stopMoving(bot);
             NavigationHelper.teleportNear(bot, ownerPos);
             return TickResult.CONTINUE;
         }
 
         if (distance <= FOLLOW_DISTANCE) {
+            NavigationHelper.stopMoving(bot);
             LookHelper.lookAt(bot.getFakePlayer(), ownerPos.add(0, owner.getStandingEyeHeight(), 0));
             return TickResult.CONTINUE;
         }

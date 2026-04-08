@@ -66,6 +66,7 @@ public class CombatTask implements BotTask {
 
     private TickResult tickApproaching(AssistantBot bot) {
         if (targetEntity == null || !targetEntity.isAlive()) {
+            NavigationHelper.stopMoving(bot);
             phase = CombatPhase.SCANNING;
             return TickResult.CONTINUE;
         }
@@ -76,6 +77,7 @@ public class CombatTask implements BotTask {
         LookHelper.lookAt(bot.getFakePlayer(), targetPos.add(0, targetEntity.getHeight() / 2, 0));
 
         if (distance <= ATTACK_RANGE) {
+            NavigationHelper.stopMoving(bot);
             phase = CombatPhase.ATTACKING;
             return TickResult.CONTINUE;
         }

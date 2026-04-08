@@ -46,6 +46,7 @@ public class PlaceTask implements BotTask {
         double distance = bot.getPos().distanceTo(targetCenter);
 
         if (distance <= BlockHelper.REACH_DISTANCE) {
+            NavigationHelper.stopMoving(bot);
             phase = PlacePhase.EQUIPPING;
             return TickResult.CONTINUE;
         }

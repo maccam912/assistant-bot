@@ -12,6 +12,7 @@ import net.minecraft.server.PlayerManager;
 import net.minecraft.server.network.ConnectedClientData;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
 import org.jetbrains.annotations.Nullable;
 
@@ -29,9 +30,28 @@ public class BotPlayer extends ServerPlayerEntity {
 
     private final MinecraftServer mcServer;
 
+    /**
+     * Desired horizontal velocity, set by NavigationHelper at ~4Hz (task tick rate).
+     * Re-applied every tick so movement is smooth between task updates.
+     * Null means no movement desired (bot is idle or stationary).
+     */
+    private Vec3d desiredHorizontalVelocity = null;
+
     public BotPlayer(MinecraftServer server, ServerWorld world, GameProfile profile) {
         super(server, world, profile, SyncedClientOptions.createDefault());
         this.mcServer = server;
+    }
+
+    /**
+     * Set the desired horizontal velocity. This will be re-applied every tick
+     * to produce smooth movement. Set to null to stop horizontal movement.
+     */
+    public void setDesiredHorizontalVelocity(@Nullable Vec3d velocity) {
+        this.desiredHorizontalVelocity = velocity;
+    }
+
+    public @Nullable Vec3d getDesiredHorizontalVelocity() {
+        return this.desiredHorizontalVelocity;
     }
 
     /**
@@ -71,7 +91,7 @@ public class BotPlayer extends ServerPlayerEntity {
         mcServer.getPlayerManager().remove(this);
     }
 
-    // --- Override tick to keep chunk tracking updated ---
+    // --- Override tick to keep chunk tracking updated and apply movement ---
 
     @Override
     public void tick() {
@@ -79,6 +99,14 @@ public class BotPlayer extends ServerPlayerEntity {
             this.networkHandler.syncWithPlayerPosition();
             ((ServerWorld) this.getEntityWorld()).getChunkManager().updatePosition(this);
         }
+
+        // Re-apply desired horizontal velocity every tick so movement is smooth.
+        // Vertical velocity (gravity, jumps) is managed by entity physics.
+        if (desiredHorizontalVelocity != null) {
+            Vec3d currentVel = this.getVelocity();
+            this.setVelocity(desiredHorizontalVelocity.x, currentVel.y, desiredHorizontalVelocity.z);
+        }
+
         super.tick();
         this.playerTick();
     }

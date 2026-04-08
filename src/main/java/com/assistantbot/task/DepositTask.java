@@ -56,6 +56,7 @@ public class DepositTask implements BotTask {
         double distance = bot.getPos().distanceTo(targetCenter);
 
         if (distance <= 3.0) {
+            NavigationHelper.stopMoving(bot);
             phase = DepositPhase.DEPOSITING;
             return TickResult.CONTINUE;
         }
