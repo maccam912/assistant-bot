@@ -22,7 +22,7 @@ public class FollowTask implements BotTask {
         }
 
         Vec3d botPos = bot.getPos();
-        Vec3d ownerPos = owner.getPos();
+        Vec3d ownerPos = owner.getEntityPos();
         double distance = botPos.distanceTo(ownerPos);
 
         if (distance > TOO_FAR_DISTANCE) {

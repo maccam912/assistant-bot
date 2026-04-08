@@ -21,7 +21,7 @@ public final class NavigationHelper {
 
     public static void moveToward(AssistantBot bot, Vec3d target, double speed) {
         FakePlayer player = bot.getFakePlayer();
-        Vec3d currentPos = player.getPos();
+        Vec3d currentPos = player.getEntityPos();
 
         double dx = target.x - currentPos.x;
         double dz = target.z - currentPos.z;
@@ -59,7 +59,7 @@ public final class NavigationHelper {
         FakePlayer player = bot.getFakePlayer();
         if (!player.isOnGround()) return false;
 
-        Vec3d pos = player.getPos();
+        Vec3d pos = player.getEntityPos();
         BlockPos ahead = BlockPos.ofFloored(
                 pos.x + moveX * 2,
                 pos.y,

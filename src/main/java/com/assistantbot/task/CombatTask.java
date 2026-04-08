@@ -70,7 +70,7 @@ public class CombatTask implements BotTask {
             return TickResult.CONTINUE;
         }
 
-        Vec3d targetPos = targetEntity.getPos();
+        Vec3d targetPos = targetEntity.getEntityPos();
         double distance = bot.getPos().distanceTo(targetPos);
 
         LookHelper.lookAt(bot.getFakePlayer(), targetPos.add(0, targetEntity.getHeight() / 2, 0));
@@ -90,7 +90,7 @@ public class CombatTask implements BotTask {
             return TickResult.CONTINUE;
         }
 
-        Vec3d targetPos = targetEntity.getPos();
+        Vec3d targetPos = targetEntity.getEntityPos();
         double distance = bot.getPos().distanceTo(targetPos);
 
         if (distance > ATTACK_RANGE + 1) {

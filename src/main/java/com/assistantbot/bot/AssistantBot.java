@@ -35,12 +35,12 @@ public class AssistantBot {
         this.ownerUuid = owner.getUuid();
         this.ownerName = owner.getName().getString();
         this.botUuid = UUID.randomUUID();
-        this.world = (ServerWorld) owner.getWorld();
+        this.world = (ServerWorld) owner.getEntityWorld();
 
         GameProfile profile = new GameProfile(botUuid, "[Bot] " + ownerName);
         this.fakePlayer = FakePlayer.get(world, profile);
 
-        Vec3d ownerPos = owner.getPos();
+        Vec3d ownerPos = owner.getEntityPos();
         this.fakePlayer.refreshPositionAndAngles(
                 ownerPos.x + 1, ownerPos.y, ownerPos.z + 1,
                 owner.getYaw(), owner.getPitch()
@@ -127,7 +127,7 @@ public class AssistantBot {
         return world.getServer().getPlayerManager().getPlayer(ownerUuid);
     }
 
-    public Vec3d getPos() { return fakePlayer.getPos(); }
+    public Vec3d getPos() { return fakePlayer.getEntityPos(); }
     public BlockPos getBlockPos() { return fakePlayer.getBlockPos(); }
 
     public String getStatusString() {

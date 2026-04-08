@@ -45,7 +45,7 @@ public final class InventoryHelper {
 
             int priority = 0;
             Item item = stack.getItem();
-            if (item instanceof SwordItem) {
+            if (stack.isIn(net.minecraft.registry.tag.ItemTags.SWORDS)) {
                 priority = 3;
             } else if (item instanceof AxeItem) {
                 priority = 2;
@@ -121,16 +121,16 @@ public final class InventoryHelper {
 
     private static void moveToHand(PlayerInventory inv, int sourceSlot) {
         if (sourceSlot < 9) {
-            inv.selectedSlot = sourceSlot;
+            inv.setSelectedSlot(sourceSlot);
         } else {
             ItemStack source = inv.getStack(sourceSlot);
-            ItemStack hand = inv.getStack(inv.selectedSlot);
+            ItemStack hand = inv.getStack(inv.getSelectedSlot());
             inv.setStack(sourceSlot, hand);
-            inv.setStack(inv.selectedSlot, source);
+            inv.setStack(inv.getSelectedSlot(), source);
         }
     }
 
     private static boolean canStack(ItemStack a, ItemStack b) {
-        return ItemStack.canCombine(a, b);
+        return ItemStack.areItemsAndComponentsEqual(a, b);
     }
 }

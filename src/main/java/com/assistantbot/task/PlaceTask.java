@@ -56,7 +56,7 @@ public class PlaceTask implements BotTask {
     }
 
     private TickResult tickEquipping(AssistantBot bot) {
-        Identifier id = new Identifier(blockId);
+        Identifier id = Identifier.of(blockId);
         Item item = Registries.ITEM.get(id);
 
         boolean equipped = InventoryHelper.equipItem(bot.getFakePlayer(), item);
