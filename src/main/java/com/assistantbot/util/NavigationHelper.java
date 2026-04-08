@@ -1,5 +1,6 @@
 package com.assistantbot.util;
 
+import com.assistantbot.AssistantMod;
 import com.assistantbot.bot.AssistantBot;
 import com.assistantbot.bot.BotPlayer;
 import com.assistantbot.nav.BotPathfinder;
@@ -42,6 +43,7 @@ public final class NavigationHelper {
         Vec3d currentPos = player.getEntityPos();
 
         double dx = target.x - currentPos.x;
+        double dy = target.y - currentPos.y;
         double dz = target.z - currentPos.z;
         double horizontalDist = Math.sqrt(dx * dx + dz * dz);
 
@@ -57,9 +59,12 @@ public final class NavigationHelper {
         // this every tick so movement is smooth between task updates.
         botPlayer.setDesiredHorizontalVelocity(new Vec3d(velX, 0, velZ));
 
-        // Jump if needed (applied once; entity physics handles the arc).
-        if (shouldJump(bot, velX, velZ)) {
-            player.setVelocity(player.getVelocity().add(0, JUMP_VELOCITY - player.getVelocity().y, 0));
+        // Jump if needed: either waypoint is above us, or blocked ahead.
+        boolean waypointAbove = dy > 0.5 && horizontalDist < 2.0;
+        if (waypointAbove || shouldJump(bot, velX, velZ)) {
+            if (player.isOnGround()) {
+                player.setVelocity(player.getVelocity().add(0, JUMP_VELOCITY - player.getVelocity().y, 0));
+            }
         }
     }
 
@@ -80,15 +85,19 @@ public final class NavigationHelper {
             // No path or already at target — check if we're close enough
             // to just walk directly (handles the last-meter case)
             Vec3d targetVec = Vec3d.ofCenter(target);
-            if (bot.getPos().distanceTo(targetVec) < 2.0) {
+            double dist = bot.getPos().distanceTo(targetVec);
+            if (dist < 2.0) {
+                AssistantMod.LOGGER.info("navigateTo: at destination (dist={}), stopping", String.format("%.1f", dist));
                 stopMoving(bot);
                 return false;
             }
-            // Pathfinding failed — fall back to direct movement
-            moveToward(bot, targetVec, speed);
+            // Pathfinding failed — teleport near the target instead of dumb moveToward
+            AssistantMod.LOGGER.info("navigateTo: A* failed, teleporting near target (dist={})", String.format("%.1f", dist));
+            teleportNear(bot, targetVec);
             return true;
         }
 
+        AssistantMod.LOGGER.info("navigateTo: following waypoint {}", nextWaypoint);
         moveToward(bot, nextWaypoint, speed);
         return true;
     }
