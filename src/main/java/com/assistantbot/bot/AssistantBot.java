@@ -1,6 +1,7 @@
 package com.assistantbot.bot;
 
 import com.assistantbot.AssistantMod;
+import com.assistantbot.nav.BotPathfinder;
 import com.assistantbot.task.BotTask;
 import com.assistantbot.task.CombatTask;
 import com.assistantbot.task.IdleTask;
@@ -29,6 +30,7 @@ public class AssistantBot {
     private BotTask currentTask;
     private BotTask savedTask; // saved during combat interrupt, restored after
     private float lastKnownHealth;
+    private BotPathfinder pathfinder;
 
     public AssistantBot(ServerPlayerEntity owner) {
         this.ownerUuid = owner.getUuid();
@@ -47,6 +49,7 @@ public class AssistantBot {
 
         this.currentTask = new IdleTask();
         this.lastKnownHealth = botPlayer.getHealth();
+        this.pathfinder = new BotPathfinder(this);
 
         AssistantMod.LOGGER.info("Assistant bot spawned for {} at {}", ownerName, botPlayer.getBlockPos());
     }
@@ -109,6 +112,10 @@ public class AssistantBot {
         if (currentTask != null) {
             currentTask.onStop(this);
         }
+        if (pathfinder != null) {
+            pathfinder.destroy();
+            pathfinder = null;
+        }
         if (botPlayer != null) {
             botPlayer.despawn();
         }
@@ -124,6 +131,7 @@ public class AssistantBot {
     public UUID getOwnerUuid() { return ownerUuid; }
     public String getOwnerName() { return ownerName; }
     public BotTask getCurrentTask() { return currentTask; }
+    public BotPathfinder getPathfinder() { return pathfinder; }
 
     public ServerPlayerEntity getOwnerPlayer() {
         return world.getServer().getPlayerManager().getPlayer(ownerUuid);

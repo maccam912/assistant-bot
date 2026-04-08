@@ -53,12 +53,13 @@ public class MineTask implements BotTask {
 
         if (distance <= BlockHelper.REACH_DISTANCE) {
             NavigationHelper.stopMoving(bot);
+            bot.getPathfinder().clearPath();
             phase = MinePhase.EQUIPPING;
             return TickResult.CONTINUE;
         }
 
         LookHelper.lookAt(bot.getFakePlayer(), targetCenter);
-        NavigationHelper.moveToward(bot, targetCenter, NavigationHelper.WALK_SPEED);
+        NavigationHelper.navigateTo(bot, targetPos, NavigationHelper.WALK_SPEED);
         return TickResult.CONTINUE;
     }
 

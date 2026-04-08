@@ -67,6 +67,7 @@ public class CombatTask implements BotTask {
     private TickResult tickApproaching(AssistantBot bot) {
         if (targetEntity == null || !targetEntity.isAlive()) {
             NavigationHelper.stopMoving(bot);
+            bot.getPathfinder().clearPath();
             phase = CombatPhase.SCANNING;
             return TickResult.CONTINUE;
         }
@@ -78,11 +79,12 @@ public class CombatTask implements BotTask {
 
         if (distance <= ATTACK_RANGE) {
             NavigationHelper.stopMoving(bot);
+            bot.getPathfinder().clearPath();
             phase = CombatPhase.ATTACKING;
             return TickResult.CONTINUE;
         }
 
-        NavigationHelper.moveToward(bot, targetPos, NavigationHelper.SPRINT_SPEED);
+        NavigationHelper.navigateTo(bot, targetPos, NavigationHelper.SPRINT_SPEED);
         return TickResult.CONTINUE;
     }
 
@@ -96,6 +98,7 @@ public class CombatTask implements BotTask {
         double distance = bot.getPos().distanceTo(targetPos);
 
         if (distance > ATTACK_RANGE + 1) {
+            bot.getPathfinder().clearPath();
             phase = CombatPhase.APPROACHING;
             return TickResult.CONTINUE;
         }

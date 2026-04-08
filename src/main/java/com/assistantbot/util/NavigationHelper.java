@@ -2,15 +2,23 @@ package com.assistantbot.util;
 
 import com.assistantbot.bot.AssistantBot;
 import com.assistantbot.bot.BotPlayer;
+import com.assistantbot.nav.BotPathfinder;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
 /**
- * Simple movement primitives for the fake player. Sets entity velocity
- * and lets Minecraft's built-in physics (gravity, collision, friction)
- * handle the actual movement at 20Hz. No A* pathfinding yet — walks
- * toward target in a straight line, jumping over 1-block obstacles.
+ * Movement primitives for the fake player. Provides two levels of navigation:
+ *
+ * - {@link #moveToward} — Low-level: walk in a straight line toward a point.
+ *   Sets persistent velocity; Minecraft's physics handles gravity/collision at 20Hz.
+ *
+ * - {@link #navigateTo} — High-level: A* pathfinding via BotPathfinder. Computes
+ *   a path around obstacles and follows waypoints. Falls back to moveToward if
+ *   pathfinding fails.
+ *
+ * Tasks should use navigateTo() for approach phases. moveToward() remains
+ * available for short-range direct movement.
  */
 public final class NavigationHelper {
     public static final double WALK_SPEED = 0.2;    // ~4 blocks/sec
@@ -53,6 +61,44 @@ public final class NavigationHelper {
         if (shouldJump(bot, velX, velZ)) {
             player.setVelocity(player.getVelocity().add(0, JUMP_VELOCITY - player.getVelocity().y, 0));
         }
+    }
+
+    /**
+     * Navigate to a target position using A* pathfinding. Computes a path
+     * around obstacles and follows waypoints. Falls back to direct movement
+     * if pathfinding fails (e.g., target is very close or unreachable).
+     *
+     * Call this from task tick (~4Hz) instead of moveToward() for smart navigation.
+     *
+     * @return true if actively navigating, false if at destination or no path
+     */
+    public static boolean navigateTo(AssistantBot bot, BlockPos target, double speed) {
+        BotPathfinder pathfinder = bot.getPathfinder();
+        Vec3d nextWaypoint = pathfinder.getNextWaypoint(target);
+
+        if (nextWaypoint == null) {
+            // No path or already at target — check if we're close enough
+            // to just walk directly (handles the last-meter case)
+            Vec3d targetVec = Vec3d.ofCenter(target);
+            if (bot.getPos().distanceTo(targetVec) < 2.0) {
+                stopMoving(bot);
+                return false;
+            }
+            // Pathfinding failed — fall back to direct movement
+            moveToward(bot, targetVec, speed);
+            return true;
+        }
+
+        moveToward(bot, nextWaypoint, speed);
+        return true;
+    }
+
+    /**
+     * Navigate to a Vec3d target using A* pathfinding. Converts to BlockPos
+     * for path computation, walks toward exact waypoints.
+     */
+    public static boolean navigateTo(AssistantBot bot, Vec3d target, double speed) {
+        return navigateTo(bot, BlockPos.ofFloored(target), speed);
     }
 
     /**

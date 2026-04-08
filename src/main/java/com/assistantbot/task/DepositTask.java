@@ -57,12 +57,13 @@ public class DepositTask implements BotTask {
 
         if (distance <= 3.0) {
             NavigationHelper.stopMoving(bot);
+            bot.getPathfinder().clearPath();
             phase = DepositPhase.DEPOSITING;
             return TickResult.CONTINUE;
         }
 
         LookHelper.lookAt(bot.getFakePlayer(), targetCenter);
-        NavigationHelper.moveToward(bot, targetCenter, NavigationHelper.WALK_SPEED);
+        NavigationHelper.navigateTo(bot, containerPos, NavigationHelper.WALK_SPEED);
         return TickResult.CONTINUE;
     }
 

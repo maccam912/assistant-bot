@@ -18,6 +18,7 @@ public interface BotTask {
      */
     default void onStop(AssistantBot bot) {
         NavigationHelper.stopMoving(bot);
+        bot.getPathfinder().clearPath();
     }
 
     default String getStatusString() { return "unknown"; }
