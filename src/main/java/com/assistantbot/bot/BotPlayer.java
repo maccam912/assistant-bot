@@ -1,6 +1,7 @@
 package com.assistantbot.bot;
 
 import com.mojang.authlib.GameProfile;
+import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.passive.AbstractHorseEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.network.packet.c2s.common.SyncedClientOptions;
@@ -36,6 +37,13 @@ public class BotPlayer extends ServerPlayerEntity {
      * Null means no movement desired (bot is idle or stationary).
      */
     private Vec3d desiredHorizontalVelocity = null;
+
+    /** Callback invoked when damage would have been lethal. Set by AssistantBot. */
+    private Runnable onLethalDamageCallback = null;
+
+    public void setOnLethalDamageCallback(Runnable callback) {
+        this.onLethalDamageCallback = callback;
+    }
 
     public BotPlayer(MinecraftServer server, ServerWorld world, GameProfile profile) {
         super(server, world, profile, SyncedClientOptions.createDefault());
@@ -109,6 +117,38 @@ public class BotPlayer extends ServerPlayerEntity {
 
         super.tick();
         this.playerTick();
+    }
+
+    // --- Invincibility: clamp damage so bot never dies ---
+
+    @Override
+    public boolean damage(ServerWorld world, DamageSource source, float amount) {
+        float currentHealth = this.getHealth();
+
+        // Clamp damage so health never reaches 0 — prevents
+        // LivingEntity.damage() from triggering onDeath() internally.
+        float maxAllowable = currentHealth - 1.0f;
+        if (amount >= maxAllowable) {
+            boolean wasLethal = (amount >= currentHealth);
+            amount = Math.max(0, maxAllowable); // leaves us at 1 HP
+            boolean result = super.damage(world, source, amount);
+            if (wasLethal && onLethalDamageCallback != null) {
+                onLethalDamageCallback.run();
+            }
+            return result;
+        }
+
+        return super.damage(world, source, amount);
+    }
+
+    @Override
+    public void onDeath(DamageSource damageSource) {
+        // Never allow death — reset health and cancel.
+        // This is a safety net for damage sources that bypass damage()
+        // (e.g., void damage, /kill command).
+        this.setHealth(1.0f);
+        this.deathTime = 0;
+        this.dead = false;
     }
 
     // --- Safety overrides (like Carpet mod) ---
