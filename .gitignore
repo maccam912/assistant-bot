@@ -27,6 +27,9 @@ fabric-*.mixins.json
 fabric-*.accesswidener
 /fabric.mod.json
 
+# Environment variables (secrets)
+.env
+
 # OS
 .DS_Store
 Thumbs.db
