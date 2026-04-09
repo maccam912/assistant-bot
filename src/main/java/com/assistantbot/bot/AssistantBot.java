@@ -46,7 +46,7 @@ public class AssistantBot {
         this.botUuid = UUID.randomUUID();
         this.world = (ServerWorld) owner.getEntityWorld();
 
-        GameProfile profile = new GameProfile(botUuid, "[Bot] " + ownerName);
+        GameProfile profile = new GameProfile(botUuid, "[Bot]" + ownerName);
         this.botPlayer = new BotPlayer(world.getServer(), world, profile);
 
         Vec3d ownerPos = owner.getEntityPos();

@@ -6,10 +6,14 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 
@@ -18,14 +22,19 @@ import java.util.concurrent.CompletableFuture;
  * Sends a structure description, receives compact JSON, parses it into
  * a BuildStructure. Runs asynchronously to avoid blocking the server thread.
  *
- * Configuration via environment variables:
- *   OPENROUTER_API_KEY  — bearer token (required)
- *   OPENROUTER_BASE_URL — API base URL (required, e.g. https://openrouter.ai/api/v1)
- *   OPENROUTER_MODEL    — model identifier (required, e.g. anthropic/claude-sonnet-4)
+ * Configuration:
+ *   OPENROUTER_API_KEY  — env var / .env: bearer token (required)
+ *   OPENROUTER_BASE_URL — env var / .env: API base URL (required)
+ *   OPENROUTER_MODEL    — read from mounted file at /config/openrouter-model
+ *                         (falls back to env var / .env if file not found)
  */
 public class LlmClient {
 
-    private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(90);
+    /** 3 minute timeout — if the LLM hasn't responded by then, the request has failed. */
+    private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(180);
+
+    /** Path to the mounted ConfigMap file containing the model name. */
+    private static final String MODEL_FILE_PATH = "/config/openrouter-model";
 
     private static final String SYSTEM_PROMPT = """
             You are a Minecraft structure generator. Given a description, output a compact JSON object for a voxel structure.
@@ -85,28 +94,63 @@ public class LlmClient {
     private BuildStructure requestStructure(String description) throws Exception {
         String baseUrl = requireEnv("OPENROUTER_BASE_URL");
         String apiKey = requireEnv("OPENROUTER_API_KEY");
-        String model = requireEnv("OPENROUTER_MODEL");
+        String model = readModel();
 
         String url = baseUrl.replaceAll("/+$", "") + "/chat/completions";
         String userMessage = "Description: " + description + "\nAvailable inventory: infinite (creative mode)";
 
         // First attempt
+        AssistantMod.LOGGER.info("Requesting structure from LLM for: \"{}\"", description);
         String content = callApi(url, apiKey, model, userMessage, null, null);
         try {
             BuildStructure structure = BuildStructure.parse(content);
-            AssistantMod.LOGGER.info("LLM structure parsed: {} blocks", structure.getBlocks().size());
+            AssistantMod.LOGGER.info("LLM structure parsed successfully: {} blocks", structure.getBlocks().size());
             return structure;
         } catch (IllegalArgumentException parseError) {
             AssistantMod.LOGGER.warn("First LLM parse failed ({}), sending repair request", parseError.getMessage());
+            AssistantMod.LOGGER.warn("Unparseable LLM response body (first 500 chars): {}",
+                    content.length() > 500 ? content.substring(0, 500) + "..." : content);
 
             // Repair attempt: send the bad response back with the parse error
+            AssistantMod.LOGGER.info("Sending repair request to LLM...");
             String repairContent = callApi(url, apiKey, model, userMessage, content,
                     "Your response could not be parsed. Error: " + parseError.getMessage()
                             + "\nPlease output ONLY the corrected JSON.");
-            BuildStructure structure2 = BuildStructure.parse(repairContent); // let this throw if repair also fails
-            AssistantMod.LOGGER.info("LLM repair parse succeeded: {} blocks", structure2.getBlocks().size());
-            return structure2;
+            try {
+                BuildStructure structure2 = BuildStructure.parse(repairContent);
+                AssistantMod.LOGGER.info("LLM repair parse succeeded: {} blocks", structure2.getBlocks().size());
+                return structure2;
+            } catch (IllegalArgumentException repairParseError) {
+                AssistantMod.LOGGER.error("Repair response also failed to parse: {}", repairParseError.getMessage());
+                AssistantMod.LOGGER.error("Unparseable repair response body (first 500 chars): {}",
+                        repairContent.length() > 500 ? repairContent.substring(0, 500) + "..." : repairContent);
+                throw repairParseError;
+            }
         }
+    }
+
+    /**
+     * Read the model name from a mounted file (re-read every time so ConfigMap
+     * changes take effect without restarting the pod). Falls back to env var.
+     */
+    private String readModel() {
+        Path modelFile = Path.of(MODEL_FILE_PATH);
+        if (Files.exists(modelFile)) {
+            try {
+                String model = Files.readString(modelFile).trim();
+                if (!model.isEmpty()) {
+                    AssistantMod.LOGGER.info("Using model from {}: {}", MODEL_FILE_PATH, model);
+                    return model;
+                }
+                AssistantMod.LOGGER.warn("Model file {} is empty, falling back to env var", MODEL_FILE_PATH);
+            } catch (IOException e) {
+                AssistantMod.LOGGER.warn("Failed to read model file {}: {}, falling back to env var",
+                        MODEL_FILE_PATH, e.getMessage());
+            }
+        } else {
+            AssistantMod.LOGGER.debug("Model file {} not found, falling back to env var", MODEL_FILE_PATH);
+        }
+        return requireEnv("OPENROUTER_MODEL");
     }
 
     /**
@@ -156,7 +200,7 @@ public class LlmClient {
 
         String requestBody = gson.toJson(body);
 
-        AssistantMod.LOGGER.info("Sending LLM request to {} (model={})", url, model);
+        AssistantMod.LOGGER.info("Sending LLM request to {} (model={}, timeout={}s)", url, model, HTTP_TIMEOUT.toSeconds());
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -166,22 +210,57 @@ public class LlmClient {
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        long startTime = System.currentTimeMillis();
+        HttpResponse<String> response;
+        try {
+            response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (HttpTimeoutException e) {
+            long elapsed = (System.currentTimeMillis() - startTime) / 1000;
+            AssistantMod.LOGGER.error("LLM request timed out after {}s (limit={}s)", elapsed, HTTP_TIMEOUT.toSeconds());
+            throw new RuntimeException("LLM request timed out after " + elapsed + " seconds", e);
+        } catch (IOException e) {
+            long elapsed = (System.currentTimeMillis() - startTime) / 1000;
+            AssistantMod.LOGGER.error("LLM request failed with IO error after {}s: {}", elapsed, e.getMessage());
+            throw new RuntimeException("LLM request IO error: " + e.getMessage(), e);
+        }
+
+        long elapsed = (System.currentTimeMillis() - startTime) / 1000;
+        AssistantMod.LOGGER.info("LLM responded with HTTP {} in {}s ({} bytes)",
+                response.statusCode(), elapsed, response.body().length());
 
         if (response.statusCode() != 200) {
             String bodyPreview = response.body();
-            if (bodyPreview.length() > 200) bodyPreview = bodyPreview.substring(0, 200) + "...";
+            if (bodyPreview.length() > 500) bodyPreview = bodyPreview.substring(0, 500) + "...";
+            AssistantMod.LOGGER.error("LLM returned HTTP {}: {}", response.statusCode(), bodyPreview);
             throw new RuntimeException("HTTP " + response.statusCode() + ": " + bodyPreview);
         }
 
         // Extract choices[0].message.content
-        JsonObject responseJson = JsonParser.parseString(response.body()).getAsJsonObject();
-        String content = responseJson.getAsJsonArray("choices")
-                .get(0).getAsJsonObject()
-                .getAsJsonObject("message")
-                .get("content").getAsString();
+        String rawBody = response.body();
+        JsonObject responseJson;
+        try {
+            responseJson = JsonParser.parseString(rawBody).getAsJsonObject();
+        } catch (Exception e) {
+            AssistantMod.LOGGER.error("LLM response is not valid JSON: {}", e.getMessage());
+            AssistantMod.LOGGER.error("Raw response body (first 500 chars): {}",
+                    rawBody.length() > 500 ? rawBody.substring(0, 500) + "..." : rawBody);
+            throw new RuntimeException("LLM response is not valid JSON: " + e.getMessage(), e);
+        }
 
-        AssistantMod.LOGGER.info("LLM response received ({} chars)", content.length());
+        String content;
+        try {
+            content = responseJson.getAsJsonArray("choices")
+                    .get(0).getAsJsonObject()
+                    .getAsJsonObject("message")
+                    .get("content").getAsString();
+        } catch (Exception e) {
+            AssistantMod.LOGGER.error("Failed to extract content from LLM response: {}", e.getMessage());
+            AssistantMod.LOGGER.error("Response JSON structure: {}", rawBody.length() > 500
+                    ? rawBody.substring(0, 500) + "..." : rawBody);
+            throw new RuntimeException("Failed to extract content from LLM response: " + e.getMessage(), e);
+        }
+
+        AssistantMod.LOGGER.info("LLM content extracted ({} chars)", content.length());
         return content;
     }
 

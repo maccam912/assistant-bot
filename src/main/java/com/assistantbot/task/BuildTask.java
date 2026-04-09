@@ -34,6 +34,7 @@ public class BuildTask implements BotTask {
 
     private static final int MAX_APPROACH_TICKS = 20; // ~1 second, then place anyway
     private static final int MAX_RETRIES_PER_BLOCK = 3;
+    private static final int LLM_WAIT_LOG_INTERVAL = 24; // log every ~12 seconds (24 ticks * 5 game ticks = 120 game ticks)
 
     private final String description;
     private final BlockPos originPos;
@@ -41,6 +42,7 @@ public class BuildTask implements BotTask {
     private BuildPhase phase;
     private CompletableFuture<BuildStructure> llmFuture;
     private final LlmClient llmClient;
+    private int llmWaitTicks; // how many task-ticks we've been waiting for the LLM
 
     // Placement state
     private List<BlockEntry> sortedBlocks;
@@ -58,6 +60,7 @@ public class BuildTask implements BotTask {
         this.llmClient = new LlmClient();
         this.retryCount = new HashMap<>();
         this.retryQueue = new ArrayList<>();
+        this.llmWaitTicks = 0;
     }
 
     @Override
@@ -90,6 +93,12 @@ public class BuildTask implements BotTask {
 
     private TickResult tickRequesting(AssistantBot bot) {
         if (!llmFuture.isDone()) {
+            llmWaitTicks++;
+            if (llmWaitTicks % LLM_WAIT_LOG_INTERVAL == 0) {
+                int waitSeconds = llmWaitTicks * 5 / 20; // task ticks * 5 game ticks / 20 tps
+                AssistantMod.LOGGER.info("Still waiting for LLM response... ({}s elapsed, description: \"{}\")",
+                        waitSeconds, description);
+            }
             return TickResult.CONTINUE; // still waiting
         }
 
@@ -324,7 +333,10 @@ public class BuildTask implements BotTask {
     @Override
     public String getStatusString() {
         return switch (phase) {
-            case REQUESTING -> "building: thinking... (" + description + ")";
+            case REQUESTING -> {
+                int waitSeconds = llmWaitTicks * 5 / 20;
+                yield "building: waiting for LLM... (" + waitSeconds + "s, " + description + ")";
+            }
             case SORTING -> "building: planning placement order...";
             case PLACING -> {
                 int total = sortedBlocks != null ? sortedBlocks.size() : 0;
