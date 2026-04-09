@@ -14,13 +14,13 @@ import java.util.List;
 /**
  * Reactive combat: triggered by health-drop interrupt in AssistantBot.
  * Equips best weapon, scans for nearest hostile, approaches, attacks.
- * 30-second timeout prevents getting stuck. Previous task is restored
+ * 5-minute timeout prevents getting stuck. Previous task is restored
  * on completion (interrupt-via-boxing pattern from third-principles-bot).
  */
 public class CombatTask implements BotTask {
-    private static final double SCAN_RADIUS = 16.0;
+    private static final double SCAN_RADIUS = 30.0;
     private static final double ATTACK_RANGE = 3.0;
-    private static final int TIMEOUT_TICKS = 600; // 30s at 20tps
+    private static final int TIMEOUT_TICKS = 6000; // 5 min safety valve (ticksInCombat increments by 5 per task tick)
     private static final int ATTACK_COOLDOWN_TICKS = 4;
 
     private CombatPhase phase;
