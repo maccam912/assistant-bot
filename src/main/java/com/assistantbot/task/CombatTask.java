@@ -80,6 +80,12 @@ public class CombatTask implements BotTask {
     }
 
     private TickResult tickApproaching(AssistantBot bot) {
+        // Re-evaluate nearest hostile while approaching to always chase the closest threat
+        Entity nearest = findNearestHostile(bot);
+        if (nearest != null) {
+            targetEntity = nearest;
+        }
+
         if (targetEntity == null || !targetEntity.isAlive()) {
             NavigationHelper.stopMoving(bot);
             bot.getPathfinder().clearPath();
@@ -104,6 +110,12 @@ public class CombatTask implements BotTask {
     }
 
     private TickResult tickAttacking(AssistantBot bot) {
+        // Re-evaluate nearest hostile before every attack to always target the closest threat
+        Entity nearest = findNearestHostile(bot);
+        if (nearest != null) {
+            targetEntity = nearest;
+        }
+
         if (targetEntity == null || !targetEntity.isAlive()) {
             phase = CombatPhase.SCANNING;
             return TickResult.CONTINUE;
