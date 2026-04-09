@@ -32,6 +32,12 @@ public class AssistantBot {
     private float lastKnownHealth;
     private BotPathfinder pathfinder;
 
+    private static final int DOWNED_DURATION_TICKS = 2400; // 2 minutes at 20 TPS
+    private static final double DOWNED_SPEED_MULTIPLIER = 0.25;
+    private static final int ARMOR_THRESHOLD = 10; // iron armor equivalent — skip penalty if armor >= this
+
+    private long downedUntilTick = -1; // -1 = not downed; uses -1 sentinel to avoid tick-0 edge case
+
     public AssistantBot(ServerPlayerEntity owner) {
         this.ownerUuid = owner.getUuid();
         this.ownerName = owner.getName().getString();
@@ -50,6 +56,7 @@ public class AssistantBot {
         this.currentTask = new IdleTask();
         this.lastKnownHealth = botPlayer.getHealth();
         this.pathfinder = new BotPathfinder(this);
+        this.botPlayer.setOnLethalDamageCallback(this::onLethalDamage);
 
         AssistantMod.LOGGER.info("Assistant bot spawned for {} at {}", ownerName, botPlayer.getBlockPos());
     }
@@ -100,6 +107,35 @@ public class AssistantBot {
         }
     }
 
+    /**
+     * Returns the current speed multiplier. 0.25 when downed, 1.0 normally.
+     * Used by NavigationHelper to scale movement speed.
+     */
+    public double getSpeedMultiplier() {
+        if (downedUntilTick >= 0) {
+            long currentTick = world.getServer().getTicks();
+            if (currentTick < downedUntilTick) {
+                return DOWNED_SPEED_MULTIPLIER;
+            } else {
+                downedUntilTick = -1; // recovered
+                AssistantMod.LOGGER.info("Bot recovered from downed state");
+            }
+        }
+        return 1.0;
+    }
+
+    private void onLethalDamage() {
+        int armor = botPlayer.getArmor();
+        if (armor >= ARMOR_THRESHOLD) {
+            AssistantMod.LOGGER.info("Lethal damage absorbed by armor (armor={}), no slowdown", armor);
+            return;
+        }
+
+        long currentTick = world.getServer().getTicks();
+        downedUntilTick = currentTick + DOWNED_DURATION_TICKS;
+        AssistantMod.LOGGER.info("Bot downed! Moving at 25% speed for 2 minutes (armor={})", armor);
+    }
+
     public void setTask(BotTask task) {
         if (currentTask != null) {
             currentTask.onStop(this);
@@ -141,6 +177,15 @@ public class AssistantBot {
     public BlockPos getBlockPos() { return botPlayer.getBlockPos(); }
 
     public String getStatusString() {
-        return currentTask.getStatusString();
+        String taskStatus = currentTask.getStatusString();
+        if (downedUntilTick >= 0) {
+            long currentTick = world.getServer().getTicks();
+            if (currentTick < downedUntilTick) {
+                long remainingTicks = downedUntilTick - currentTick;
+                long remainingSeconds = remainingTicks / 20;
+                return taskStatus + " (downed, " + remainingSeconds + "s remaining)";
+            }
+        }
+        return taskStatus;
     }
 }
