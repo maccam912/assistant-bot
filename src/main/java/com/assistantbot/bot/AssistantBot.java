@@ -7,6 +7,7 @@ import com.assistantbot.task.CombatTask;
 import com.assistantbot.task.IdleTask;
 import com.assistantbot.task.TickResult;
 import com.mojang.authlib.GameProfile;
+import net.minecraft.entity.Entity;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
@@ -30,6 +31,7 @@ public class AssistantBot {
     private BotTask currentTask;
     private BotTask savedTask; // saved during combat interrupt, restored after
     private float lastKnownHealth;
+    private float lastKnownOwnerHealth;
     private BotPathfinder pathfinder;
 
     private static final int DOWNED_DURATION_TICKS = 2400; // 2 minutes at 20 TPS
@@ -55,6 +57,7 @@ public class AssistantBot {
 
         this.currentTask = new IdleTask();
         this.lastKnownHealth = botPlayer.getHealth();
+        this.lastKnownOwnerHealth = owner.getHealth();
         this.pathfinder = new BotPathfinder(this);
         this.botPlayer.setOnLethalDamageCallback(this::onLethalDamage);
 
@@ -75,16 +78,41 @@ public class AssistantBot {
         }
 
         lastKnownHealth = botPlayer.getHealth();
+        ServerPlayerEntity owner = getOwnerPlayer();
+        if (owner != null) {
+            lastKnownOwnerHealth = owner.getHealth();
+        }
     }
 
     private void checkCombatInterrupt() {
+        if (currentTask instanceof CombatTask) return;
+
+        // Check 1: bot itself took damage
         float currentHealth = botPlayer.getHealth();
-        if (currentHealth < lastKnownHealth && !(currentTask instanceof CombatTask)) {
-            savedTask = currentTask;
-            currentTask = new CombatTask();
-            currentTask.onStart(this);
-            AssistantMod.LOGGER.info("Bot entering combat (health {} -> {})", lastKnownHealth, currentHealth);
+        if (currentHealth < lastKnownHealth) {
+            enterCombat(null);
+            AssistantMod.LOGGER.info("Bot entering combat — self-damage (health {} -> {})", lastKnownHealth, currentHealth);
+            return;
         }
+
+        // Check 2: owner took damage
+        ServerPlayerEntity owner = getOwnerPlayer();
+        if (owner != null) {
+            float ownerHealth = owner.getHealth();
+            if (ownerHealth < lastKnownOwnerHealth) {
+                Entity attacker = owner.getAttacker();
+                enterCombat(attacker);
+                AssistantMod.LOGGER.info("Bot entering combat — owner attacked (owner health {} -> {}, attacker: {})",
+                        lastKnownOwnerHealth, ownerHealth,
+                        attacker != null ? attacker.getType().getName().getString() : "unknown");
+            }
+        }
+    }
+
+    private void enterCombat(Entity initialTarget) {
+        savedTask = currentTask;
+        currentTask = (initialTarget != null) ? new CombatTask(initialTarget) : new CombatTask();
+        currentTask.onStart(this);
     }
 
     private void onTaskComplete() {

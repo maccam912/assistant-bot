@@ -6,6 +6,7 @@ import com.assistantbot.util.LookHelper;
 import com.assistantbot.util.NavigationHelper;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.mob.HostileEntity;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
@@ -34,6 +35,15 @@ public class CombatTask implements BotTask {
         this.phase = CombatPhase.EQUIPPING;
     }
 
+    /**
+     * Create a CombatTask with a pre-identified target (e.g., the entity
+     * attacking the owner, obtained via owner.getAttacker()).
+     */
+    public CombatTask(Entity initialTarget) {
+        this.phase = CombatPhase.EQUIPPING;
+        this.targetEntity = initialTarget;
+    }
+
     @Override
     public TickResult tick(AssistantBot bot) {
         ticksInCombat += 5;
@@ -56,6 +66,11 @@ public class CombatTask implements BotTask {
     }
 
     private TickResult tickScanning(AssistantBot bot) {
+        // If we already have a living target (e.g., pre-identified attacker), skip scan
+        if (targetEntity != null && targetEntity.isAlive()) {
+            phase = CombatPhase.APPROACHING;
+            return TickResult.CONTINUE;
+        }
         targetEntity = findNearestHostile(bot);
         if (targetEntity == null) {
             return TickResult.COMPLETE;
@@ -115,11 +130,16 @@ public class CombatTask implements BotTask {
         return TickResult.CONTINUE;
     }
 
+    /**
+     * Scans for the nearest hostile entity around the owner's position.
+     * Falls back to the bot's position if the owner is offline.
+     */
     private Entity findNearestHostile(AssistantBot bot) {
-        Vec3d pos = bot.getPos();
+        ServerPlayerEntity owner = bot.getOwnerPlayer();
+        Vec3d scanCenter = (owner != null) ? owner.getEntityPos() : bot.getPos();
         Box searchBox = new Box(
-                pos.x - SCAN_RADIUS, pos.y - SCAN_RADIUS, pos.z - SCAN_RADIUS,
-                pos.x + SCAN_RADIUS, pos.y + SCAN_RADIUS, pos.z + SCAN_RADIUS
+                scanCenter.x - SCAN_RADIUS, scanCenter.y - SCAN_RADIUS, scanCenter.z - SCAN_RADIUS,
+                scanCenter.x + SCAN_RADIUS, scanCenter.y + SCAN_RADIUS, scanCenter.z + SCAN_RADIUS
         );
 
         List<HostileEntity> hostiles = bot.getWorld().getEntitiesByClass(
@@ -128,8 +148,8 @@ public class CombatTask implements BotTask {
 
         return hostiles.stream()
                 .min((a, b) -> Double.compare(
-                        a.squaredDistanceTo(pos.x, pos.y, pos.z),
-                        b.squaredDistanceTo(pos.x, pos.y, pos.z)))
+                        a.squaredDistanceTo(scanCenter.x, scanCenter.y, scanCenter.z),
+                        b.squaredDistanceTo(scanCenter.x, scanCenter.y, scanCenter.z)))
                 .orElse(null);
     }
 
