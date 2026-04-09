@@ -38,6 +38,9 @@ public final class NavigationHelper {
      * the actual movement happens continuously at 20Hz between calls.
      */
     public static void moveToward(AssistantBot bot, Vec3d target, double speed) {
+        // Apply downed-state speed penalty
+        speed *= bot.getSpeedMultiplier();
+
         ServerPlayerEntity player = bot.getFakePlayer();
         BotPlayer botPlayer = (BotPlayer) player;
         Vec3d currentPos = player.getEntityPos();
