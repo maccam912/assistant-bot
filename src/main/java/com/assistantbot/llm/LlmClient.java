@@ -34,7 +34,7 @@ public class LlmClient {
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(180);
 
     /** Path to the mounted ConfigMap file containing the model name. */
-    private static final String MODEL_FILE_PATH = "/config/openrouter-model";
+    private static final String MODEL_FILE_PATH = "/config/openrouter/openrouter-model";
 
     private static final String SYSTEM_PROMPT = """
             You are a Minecraft structure generator. Given a description, output a compact JSON object for a voxel structure.
