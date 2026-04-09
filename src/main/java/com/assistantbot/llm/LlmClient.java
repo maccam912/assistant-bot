@@ -186,7 +186,7 @@ public class LlmClient {
     }
 
     private static String requireEnv(String name) {
-        String value = System.getenv(name);
+        String value = EnvLoader.get(name);
         if (value == null || value.isBlank()) {
             throw new RuntimeException("Environment variable " + name + " is not set");
         }
