@@ -24,6 +24,7 @@ import net.minecraft.util.math.BlockPos;
  *   /assistant mine <pos>      — mine block at position
  *   /assistant place <block> <pos> — place block
  *   /assistant deposit         — deposit inventory into nearest container
+ *   /assistant build <description> — ask LLM to build something
  *   /assistant status          — show current task and position
  */
 public class AssistantCommand {
@@ -50,6 +51,9 @@ public class AssistantCommand {
                             .executes(AssistantCommand::place))))
                 .then(CommandManager.literal("deposit")
                     .executes(AssistantCommand::deposit))
+                .then(CommandManager.literal("build")
+                    .then(CommandManager.argument("description", StringArgumentType.greedyString())
+                        .executes(AssistantCommand::build)))
                 .then(CommandManager.literal("status")
                     .executes(AssistantCommand::status))
         );
@@ -133,6 +137,20 @@ public class AssistantCommand {
         bot.setTask(new DepositTask());
         ctx.getSource().sendFeedback(
                 () -> Text.literal("§a[Assistant] Depositing items to nearest container..."), false);
+        return 1;
+    }
+
+    private static int build(CommandContext<ServerCommandSource> ctx) {
+        AssistantBot bot = requireBot(ctx);
+        if (bot == null) return 0;
+
+        String description = StringArgumentType.getString(ctx, "description");
+        BlockPos origin = bot.getBlockPos();
+
+        bot.setTask(new BuildTask(description, origin));
+        ctx.getSource().sendFeedback(
+                () -> Text.literal("§a[Assistant] Building: " + description + " (asking LLM...)"),
+                false);
         return 1;
     }
 
