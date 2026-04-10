@@ -19,7 +19,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * HTTP client for calling an LLM via OpenRouter's OpenAI-compatible API.
- * Sends a structure description, receives compact JSON, parses it into
+ * Sends a structure description, receives VXB-1 format text, parses it into
  * a BuildStructure. Runs asynchronously to avoid blocking the server thread.
  *
  * Configuration:
@@ -37,29 +37,96 @@ public class LlmClient {
     private static final String MODEL_FILE_PATH = "/config/openrouter/openrouter-model";
 
     private static final String SYSTEM_PROMPT = """
-            You are a Minecraft structure generator. Given a description, output a compact JSON object for a voxel structure.
+            You are a Minecraft structure generator. Given a description, output a structure in VXB-1 format.
 
-            RULES:
-            - Do NOT use "minecraft:" prefixes — use short names: "dirt", "oak_planks", "stone", etc.
-            - Do NOT include a "materials" field — it will be computed automatically.
-            - Omit air and empty spaces — only output solid blocks.
-            - Keep structures small (under 10x10x10).
-            - Output ONLY the JSON — no markdown fences, no explanation.
+            Output ONLY the VXB-1 text — no markdown fences, no explanation, no commentary.
 
-            Choose one of two formats:
+            VXB-1 FORMAT:
+            Line 1 must be "VXB-1".
+            Then: name, origin, size, axes (header fields).
+            Then: palette/endpalette section mapping single-char symbols to block IDs.
+            Then: build commands (box, set, layer/endlayer).
 
-            FORMAT A — Tuple array (works for any structure):
-            {"p":["block_a","block_b"],"b":[[x,y,z,i],...]}
-              p = palette array of block names; b = array of [x,y,z,palette_index]; y=0 is ground level.
-            Example (4-block stone pillar):
-            {"p":["stone"],"b":[[0,0,0,0],[0,1,0,0],[0,2,0,0],[0,3,0,0]]}
+            COMMANDS:
+            - box x1 y1 z1 x2 y2 z2 S — fill an inclusive cuboid with symbol S.
+            - set x y z S — place one block.
+            - layer y Y z Z0 / endlayer — 2D character grid at fixed y=Y, rows starting at z=Z0.
+              Rows are ordered by increasing z. Characters in each row are ordered by increasing x.
+              Use "." for air (or the air palette symbol) inside layers.
 
-            FORMAT B — Layered character grids (best for dense box-like structures):
-            {"p":{"a":"block_a","b":"block_b"},"l":["layer_y0","layer_y1",...],"offset":[ox,oy,oz]}
-              p = single-char palette map; l = one string per Y level with rows separated by "/";
-              offset = [x,y,z] applied to all grid positions (default [0,0,0]). Use "." for air gaps.
-            Example (3x1x2 dirt floor centered at origin):
-            {"p":{"d":"dirt"},"l":["ddd/ddd"],"offset":[-1,0,-1]}""";
+            Later commands overwrite earlier ones (last-write-wins). This means you can:
+            1. Lay down a solid floor with box.
+            2. Define wall shells with layers.
+            3. Carve doors/windows by overwriting with air in later layers.
+            4. Add roof and details.
+
+            AUTHORING RULES:
+            1. Use box for any rectangle or prism larger than 2x2x2.
+            2. Use layer for irregular walls, floors with holes, or decorative patterns.
+            3. Never emit coordinates outside the declared size.
+            4. Use palette symbols consistently — do not invent new symbols after endpalette.
+            5. Avoid directional block states unless necessary; when necessary, hide them in the palette.
+            6. Prefer bilateral symmetry when possible.
+            7. Build from large masses to small details.
+            8. Keep structures small (under 15x15x15).
+            9. Use short block names without "minecraft:" prefix: "dirt", "oak_planks", "stone", etc.
+            10. y=0 is ground level. y=up, x=east, z=south.
+
+            EXAMPLE (small cabin):
+            VXB-1
+            name cabin_9x7x7
+            origin 0 0 0
+            size 9 7 7
+            axes x=east y=up z=south
+
+            palette
+            . = air
+            C = cobblestone
+            P = spruce_planks
+            L = spruce_log[axis=y]
+            G = glass_pane
+            D = spruce_door[half=lower,facing=south]
+            U = spruce_door[half=upper,facing=south]
+            T = torch
+            endpalette
+
+            box 0 0 0 8 0 6 C
+
+            layer y 1 z 0
+            LPPGPGPPL
+            P.......P
+            G.......G
+            P.......P
+            G.......G
+            P.......P
+            LPPPDPPPL
+            endlayer
+
+            layer y 2 z 0
+            LPPGPGPPL
+            P.......P
+            G.......G
+            P.......P
+            G.......G
+            P.......P
+            LPPU.UPPL
+            endlayer
+
+            layer y 3 z 0
+            LPPGPGPPL
+            P.......P
+            G.......G
+            P.......P
+            G.......G
+            P.......P
+            LPPPPPPPL
+            endlayer
+
+            box 0 4 0 8 4 6 P
+            box 1 5 1 7 5 5 P
+            box 2 6 2 6 6 4 P
+
+            set 4 1 3 T""";
 
     private final HttpClient httpClient;
     private final Gson gson;
@@ -114,8 +181,8 @@ public class LlmClient {
             // Repair attempt: send the bad response back with the parse error
             AssistantMod.LOGGER.info("Sending repair request to LLM...");
             String repairContent = callApi(url, apiKey, model, userMessage, content,
-                    "Your response could not be parsed. Error: " + parseError.getMessage()
-                            + "\nPlease output ONLY the corrected JSON.");
+                    "Your response could not be parsed as VXB-1. Error: " + parseError.getMessage()
+                            + "\nPlease output ONLY the corrected VXB-1 text, starting with 'VXB-1' on the first line.");
             try {
                 BuildStructure structure2 = BuildStructure.parse(repairContent);
                 AssistantMod.LOGGER.info("LLM repair parse succeeded: {} blocks", structure2.getBlocks().size());
@@ -193,10 +260,6 @@ public class LlmClient {
         body.addProperty("model", model);
         body.add("messages", messages);
         body.addProperty("stream", false);
-
-        JsonObject responseFormat = new JsonObject();
-        responseFormat.addProperty("type", "json_object");
-        body.add("response_format", responseFormat);
 
         String requestBody = gson.toJson(body);
 
