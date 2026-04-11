@@ -53,6 +53,10 @@ public class LlmClient {
             - layer y Y z Z0 / endlayer — 2D character grid at fixed y=Y, rows starting at z=Z0.
               Rows are ordered by increasing z. Characters in each row are ordered by increasing x.
               Use "." for air (or the air palette symbol) inside layers.
+            - layer y Y1-Y2 z Z0 / endlayer — same as above but the grid is duplicated to every
+              Y level from Y1 to Y2 (inclusive). Use this for tall repetitive sections like walls,
+              pillars, or towers where the same cross-section repeats across many layers.
+              Example: "layer y 1-8 z 0" applies the grid to y=1, y=2, ..., y=8.
 
             Later commands overwrite earlier ones (last-write-wins). This means you can:
             1. Lay down a solid floor with box.
@@ -68,9 +72,21 @@ public class LlmClient {
             5. Avoid directional block states unless necessary; when necessary, hide them in the palette.
             6. Prefer bilateral symmetry when possible.
             7. Build from large masses to small details.
-            8. Keep structures small (under 15x15x15).
+            8. Keep structures compact on the ground (under 20x20 footprint). Height can be
+                taller — use layer Y ranges to efficiently define repeating floors.
             9. Use short block names without "minecraft:" prefix: "dirt", "oak_planks", "stone", etc.
             10. y=0 is ground level. y=up, x=east, z=south.
+            11. NEVER use leaf blocks (oak_leaves, birch_leaves, etc.) as decorative elements
+                like bushes, hedges, or shrubs. Leaves decay in normal Minecraft when not
+                connected to a log within 7 blocks. Only use leaves if they are part of
+                a tree with a connected trunk.
+            12. Stained glass panes (e.g. white_stained_glass_pane) only form full flat
+                panes when they connect to adjacent panes or blocks. A single isolated
+                pane looks like a thin cross. Use at least a 2-wide span of glass panes
+                so they connect to each other and display as a proper window surface.
+            13. Use "layer y Y1-Y2 z Z0" for walls, columns, and floors that repeat
+                identically across multiple Y levels. This avoids duplicating the same
+                grid and makes tall builds feasible.
 
             EXAMPLE (small cabin):
             VXB-1

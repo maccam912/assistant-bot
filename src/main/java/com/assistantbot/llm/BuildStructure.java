@@ -37,7 +37,7 @@ public class BuildStructure {
     private static final Pattern SET_PATTERN = Pattern.compile(
             "^set\\s+(-?\\d+)\\s+(-?\\d+)\\s+(-?\\d+)\\s+(\\S)$");
     private static final Pattern LAYER_PATTERN = Pattern.compile(
-            "^layer\\s+y\\s+(-?\\d+)\\s+z\\s+(-?\\d+)$");
+            "^layer\\s+y\\s+(-?\\d+)(?:\\s*-\\s*(-?\\d+))?\\s+z\\s+(-?\\d+)$");
     private static final Pattern SIZE_PATTERN = Pattern.compile(
             "^size\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)$");
     private static final Pattern ORIGIN_PATTERN = Pattern.compile(
@@ -50,6 +50,7 @@ public class BuildStructure {
      *   <li>{@code box x1 y1 z1 x2 y2 z2 S} — inclusive cuboid fill</li>
      *   <li>{@code set x y z S} — single block placement</li>
      *   <li>{@code layer y Y z Z0}/{@code endlayer} — 2D character grid at fixed Y</li>
+     *   <li>{@code layer y Y1-Y2 z Z0}/{@code endlayer} — 2D grid duplicated across Y range</li>
      * </ul>
      * Later commands overwrite earlier ones (last-write-wins).
      *
@@ -85,7 +86,8 @@ public class BuildStructure {
 
         boolean inPalette = false;
         boolean inLayer = false;
-        int layerY = 0;
+        int layerYMin = 0;
+        int layerYMax = 0; // inclusive; same as layerYMin for single-Y layers
         int layerZ0 = 0;
         int currentLayerRow = 0;
 
@@ -120,26 +122,29 @@ public class BuildStructure {
             }
             if (inLayer) {
                 // Each line in a layer is a row of symbols at z = layerZ0 + currentLayerRow
+                // Applied to all Y values in the range [layerYMin, layerYMax]
                 int z = layerZ0 + currentLayerRow;
-                for (int xi = 0; xi < line.length(); xi++) {
-                    char ch = line.charAt(xi);
-                    if (ch == '.') {
-                        // Air — remove any previously placed block at this position
-                        // (last-write-wins: explicitly writing air clears the cell)
-                        positionMap.remove(packPos(xi, layerY, z));
-                        continue;
+                for (int yi = layerYMin; yi <= layerYMax; yi++) {
+                    for (int xi = 0; xi < line.length(); xi++) {
+                        char ch = line.charAt(xi);
+                        if (ch == '.') {
+                            // Air — remove any previously placed block at this position
+                            // (last-write-wins: explicitly writing air clears the cell)
+                            positionMap.remove(packPos(xi, yi, z));
+                            continue;
+                        }
+                        String blockId = palette.get(ch);
+                        if (blockId == null) {
+                            throw new IllegalArgumentException(
+                                    "Line " + (lineNum + 1) + ": undefined palette symbol '" + ch + "'");
+                        }
+                        if (hasBounds && (xi >= sizeX || yi < 0 || yi >= sizeY || z < 0 || z >= sizeZ)) {
+                            throw new IllegalArgumentException(
+                                    "Line " + (lineNum + 1) + ": coordinate (" + xi + "," + yi + "," + z
+                                            + ") out of declared size bounds (" + sizeX + "," + sizeY + "," + sizeZ + ")");
+                        }
+                        positionMap.put(packPos(xi, yi, z), blockId);
                     }
-                    String blockId = palette.get(ch);
-                    if (blockId == null) {
-                        throw new IllegalArgumentException(
-                                "Line " + (lineNum + 1) + ": undefined palette symbol '" + ch + "'");
-                    }
-                    if (hasBounds && (xi >= sizeX || layerY < 0 || layerY >= sizeY || z < 0 || z >= sizeZ)) {
-                        throw new IllegalArgumentException(
-                                "Line " + (lineNum + 1) + ": coordinate (" + xi + "," + layerY + "," + z
-                                        + ") out of declared size bounds (" + sizeX + "," + sizeY + "," + sizeZ + ")");
-                    }
-                    positionMap.put(packPos(xi, layerY, z), blockId);
                 }
                 currentLayerRow++;
                 continue;
@@ -234,11 +239,15 @@ public class BuildStructure {
                 continue;
             }
 
-            // layer
+            // layer (single Y or Y range)
             Matcher layerMatch = LAYER_PATTERN.matcher(line);
             if (layerMatch.matches()) {
-                layerY = Integer.parseInt(layerMatch.group(1));
-                layerZ0 = Integer.parseInt(layerMatch.group(2));
+                int y1 = Integer.parseInt(layerMatch.group(1));
+                String y2Str = layerMatch.group(2); // null if single Y
+                int y2 = (y2Str != null) ? Integer.parseInt(y2Str) : y1;
+                layerYMin = Math.min(y1, y2);
+                layerYMax = Math.max(y1, y2);
+                layerZ0 = Integer.parseInt(layerMatch.group(3));
                 currentLayerRow = 0;
                 inLayer = true;
                 continue;
