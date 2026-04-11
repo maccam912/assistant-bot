@@ -22,7 +22,11 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Build a structure from an LLM-generated plan. State machine phases:
- *   REQUESTING → SORTING → PLACING → DONE
+ *   REQUESTING → SORTING → CLEARING → PLACING → DONE
+ *
+ * Before placing blocks, the CLEARING phase replaces everything in the
+ * structure's bounding box with air so the build doesn't merge with
+ * existing terrain, trees, etc.
  *
  * Uses server-enforced block placement (world.setBlockState) regardless
  * of bot distance. The bot walks toward each block for visual realism
@@ -30,7 +34,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public class BuildTask implements BotTask {
 
-    private enum BuildPhase { REQUESTING, SORTING, PLACING, DONE }
+    private enum BuildPhase { REQUESTING, SORTING, CLEARING, PLACING, DONE }
 
     private static final int MAX_APPROACH_TICKS = 20; // ~1 second, then place anyway
     private static final int MAX_RETRIES_PER_BLOCK = 3;
@@ -52,6 +56,12 @@ public class BuildTask implements BotTask {
     private List<Integer> retryQueue; // block indices to retry
     private int totalPlaced;
     private int totalSkipped;
+
+    // Clearing state — iterate through bounding box one Y-layer at a time
+    private BlockPos clearMin; // world-space min corner of bounding box
+    private BlockPos clearMax; // world-space max corner of bounding box
+    private int clearCurrentY; // current Y layer being cleared
+    private int totalCleared;
 
     public BuildTask(String description, BlockPos originPos) {
         this.description = description;
@@ -84,6 +94,7 @@ public class BuildTask implements BotTask {
         return switch (phase) {
             case REQUESTING -> tickRequesting(bot);
             case SORTING -> tickSorting(bot);
+            case CLEARING -> tickClearing(bot);
             case PLACING -> tickPlacing(bot);
             case DONE -> TickResult.COMPLETE;
         };
@@ -127,10 +138,74 @@ public class BuildTask implements BotTask {
     // --- Phase: SORTING (instant transition) ---
 
     private TickResult tickSorting(AssistantBot bot) {
-        // Sorting already done in tickRequesting. Transition immediately to placing.
-        phase = BuildPhase.PLACING;
-        approachTicksRemaining = MAX_APPROACH_TICKS;
-        AssistantMod.LOGGER.info("Build plan sorted: {} blocks to place", sortedBlocks.size());
+        // Sorting already done in tickRequesting. Compute bounding box and start clearing.
+        computeClearBounds();
+        clearCurrentY = clearMax.getY(); // clear top-down so trees/leaves fall naturally
+        totalCleared = 0;
+        phase = BuildPhase.CLEARING;
+        AssistantMod.LOGGER.info("Build plan sorted: {} blocks to place. Clearing area from {} to {}",
+                sortedBlocks.size(), clearMin, clearMax);
+        return TickResult.CONTINUE;
+    }
+
+    /**
+     * Compute the world-space bounding box of the structure (exact bounds,
+     * no padding). Used by the CLEARING phase to replace everything with air.
+     */
+    private void computeClearBounds() {
+        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+        for (BlockEntry entry : sortedBlocks) {
+            minX = Math.min(minX, entry.x());
+            minY = Math.min(minY, entry.y());
+            minZ = Math.min(minZ, entry.z());
+            maxX = Math.max(maxX, entry.x());
+            maxY = Math.max(maxY, entry.y());
+            maxZ = Math.max(maxZ, entry.z());
+        }
+        clearMin = originPos.add(new Vec3i(minX, minY, minZ));
+        clearMax = originPos.add(new Vec3i(maxX, maxY, maxZ));
+    }
+
+    // --- Phase: CLEARING ---
+
+    /**
+     * Clear the build area one Y-layer per tick (top-down) by replacing
+     * all non-air blocks with air. This removes terrain, trees, and other
+     * obstacles so the structure doesn't merge with existing world geometry.
+     */
+    private TickResult tickClearing(AssistantBot bot) {
+        if (clearCurrentY < clearMin.getY()) {
+            // Done clearing
+            AssistantMod.LOGGER.info("Clearing complete: {} blocks removed", totalCleared);
+            phase = BuildPhase.PLACING;
+            approachTicksRemaining = MAX_APPROACH_TICKS;
+            return TickResult.CONTINUE;
+        }
+
+        ServerWorld world = bot.getWorld();
+        BlockState air = Blocks.AIR.getDefaultState();
+
+        // Clear one full Y-layer
+        for (int x = clearMin.getX(); x <= clearMax.getX(); x++) {
+            for (int z = clearMin.getZ(); z <= clearMax.getZ(); z++) {
+                BlockPos pos = new BlockPos(x, clearCurrentY, z);
+                if (!world.getBlockState(pos).isAir()) {
+                    world.setBlockState(pos, air, Block.NOTIFY_ALL);
+                    totalCleared++;
+                }
+            }
+        }
+
+        // Look at the center of the layer being cleared for visual effect
+        Vec3d layerCenter = new Vec3d(
+                (clearMin.getX() + clearMax.getX()) / 2.0 + 0.5,
+                clearCurrentY + 0.5,
+                (clearMin.getZ() + clearMax.getZ()) / 2.0 + 0.5
+        );
+        LookHelper.lookAt(bot.getFakePlayer(), layerCenter);
+
+        clearCurrentY--;
         return TickResult.CONTINUE;
     }
 
@@ -338,6 +413,11 @@ public class BuildTask implements BotTask {
                 yield "building: waiting for LLM... (" + waitSeconds + "s, " + description + ")";
             }
             case SORTING -> "building: planning placement order...";
+            case CLEARING -> {
+                int layersTotal = clearMax.getY() - clearMin.getY() + 1;
+                int layersCleared = clearMax.getY() - clearCurrentY;
+                yield "building: clearing area " + layersCleared + "/" + layersTotal + " layers (" + totalCleared + " blocks removed)";
+            }
             case PLACING -> {
                 int total = sortedBlocks != null ? sortedBlocks.size() : 0;
                 yield "building: " + totalPlaced + "/" + total + " blocks placed (" + description + ")";

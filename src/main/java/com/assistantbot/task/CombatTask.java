@@ -19,7 +19,8 @@ import java.util.List;
  * on completion (interrupt-via-boxing pattern from third-principles-bot).
  */
 public class CombatTask implements BotTask {
-    private static final double SCAN_RADIUS = 30.0;
+    private static final double SCAN_RADIUS_HORIZONTAL = 10.0;
+    private static final double SCAN_RADIUS_VERTICAL = 5.0;
     private static final double ATTACK_RANGE = 3.0;
     private static final int TIMEOUT_TICKS = 6000; // 5 min safety valve (ticksInCombat increments by 5 per task tick)
     private static final int ATTACK_COOLDOWN_TICKS = 4;
@@ -84,6 +85,12 @@ public class CombatTask implements BotTask {
         Entity nearest = findNearestHostile(bot);
         if (nearest != null) {
             targetEntity = nearest;
+        } else {
+            // No hostiles within scan radius — disengage
+            NavigationHelper.stopMoving(bot);
+            bot.getPathfinder().clearPath();
+            phase = CombatPhase.SCANNING;
+            return TickResult.CONTINUE;
         }
 
         if (targetEntity == null || !targetEntity.isAlive()) {
@@ -114,6 +121,10 @@ public class CombatTask implements BotTask {
         Entity nearest = findNearestHostile(bot);
         if (nearest != null) {
             targetEntity = nearest;
+        } else {
+            // No hostiles within scan radius — disengage
+            phase = CombatPhase.SCANNING;
+            return TickResult.CONTINUE;
         }
 
         if (targetEntity == null || !targetEntity.isAlive()) {
@@ -143,15 +154,16 @@ public class CombatTask implements BotTask {
     }
 
     /**
-     * Scans for the nearest hostile entity around the owner's position.
+     * Scans for the nearest hostile entity around the bot's position
+     * within a tight area: 10 blocks horizontal, 5 blocks vertical.
      * Falls back to the bot's position if the owner is offline.
      */
     private Entity findNearestHostile(AssistantBot bot) {
         ServerPlayerEntity owner = bot.getOwnerPlayer();
         Vec3d scanCenter = (owner != null) ? owner.getEntityPos() : bot.getPos();
         Box searchBox = new Box(
-                scanCenter.x - SCAN_RADIUS, scanCenter.y - SCAN_RADIUS, scanCenter.z - SCAN_RADIUS,
-                scanCenter.x + SCAN_RADIUS, scanCenter.y + SCAN_RADIUS, scanCenter.z + SCAN_RADIUS
+                scanCenter.x - SCAN_RADIUS_HORIZONTAL, scanCenter.y - SCAN_RADIUS_VERTICAL, scanCenter.z - SCAN_RADIUS_HORIZONTAL,
+                scanCenter.x + SCAN_RADIUS_HORIZONTAL, scanCenter.y + SCAN_RADIUS_VERTICAL, scanCenter.z + SCAN_RADIUS_HORIZONTAL
         );
 
         List<HostileEntity> hostiles = bot.getWorld().getEntitiesByClass(
