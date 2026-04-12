@@ -30,6 +30,36 @@ public class BuildStructure {
     public List<BlockEntry> getBlocks() { return blocks; }
     public Map<String, Integer> getMaterials() { return materials; }
 
+    /**
+     * Returns all unique block IDs used in the structure.
+     */
+    public Set<String> getUniqueBlockIds() {
+        Set<String> ids = new HashSet<>();
+        for (BlockEntry entry : blocks) {
+            ids.add(entry.blockId());
+        }
+        return ids;
+    }
+
+    /**
+     * Replaces all occurrences of a block ID with a new one.
+     * Since BlockEntry is a record (immutable), this rebuilds
+     * affected entries in the list.
+     */
+    public void replaceBlockId(String oldId, String newId) {
+        for (int i = 0; i < blocks.size(); i++) {
+            BlockEntry entry = blocks.get(i);
+            if (entry.blockId().equals(oldId)) {
+                blocks.set(i, new BlockEntry(entry.x(), entry.y(), entry.z(), newId));
+            }
+        }
+        // Update materials map
+        if (materials.containsKey(oldId)) {
+            int count = materials.remove(oldId);
+            materials.merge(newId, count, Integer::sum);
+        }
+    }
+
     // --- VXB-1 Parser ---
 
     private static final Pattern BOX_PATTERN = Pattern.compile(
