@@ -22,7 +22,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Build a structure from an LLM-generated plan. State machine phases:
- *   REQUESTING → SORTING → CLEARING → PLACING → DONE
+ *   REQUESTING → VALIDATING → SORTING → CLEARING → PLACING → DONE
  *
  * Before placing blocks, the CLEARING phase replaces everything in the
  * structure's bounding box with air so the build doesn't merge with
@@ -34,7 +34,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public class BuildTask implements BotTask {
 
-    private enum BuildPhase { REQUESTING, SORTING, CLEARING, PLACING, DONE }
+    private enum BuildPhase { REQUESTING, VALIDATING, SORTING, CLEARING, PLACING, DONE }
 
     private static final int MAX_APPROACH_TICKS = 20; // ~1 second, then place anyway
     private static final int MAX_RETRIES_PER_BLOCK = 3;
@@ -47,6 +47,12 @@ public class BuildTask implements BotTask {
     private CompletableFuture<BuildStructure> llmFuture;
     private final LlmClient llmClient;
     private int llmWaitTicks; // how many task-ticks we've been waiting for the LLM
+
+    // Validation state
+    private BuildStructure structure; // stored between REQUESTING and VALIDATING
+    private CompletableFuture<Map<String, String>> correctionFuture;
+    private int validationWaitTicks;
+    private boolean correctionAttempted; // true after one correction round
 
     // Placement state
     private List<BlockEntry> sortedBlocks;
@@ -87,12 +93,17 @@ public class BuildTask implements BotTask {
             llmFuture.cancel(true);
             AssistantMod.LOGGER.info("BuildTask cancelled, LLM request aborted");
         }
+        if (correctionFuture != null && !correctionFuture.isDone()) {
+            correctionFuture.cancel(true);
+            AssistantMod.LOGGER.info("BuildTask cancelled, block correction request aborted");
+        }
     }
 
     @Override
     public TickResult tick(AssistantBot bot) {
         return switch (phase) {
             case REQUESTING -> tickRequesting(bot);
+            case VALIDATING -> tickValidating(bot);
             case SORTING -> tickSorting(bot);
             case CLEARING -> tickClearing(bot);
             case PLACING -> tickPlacing(bot);
@@ -114,7 +125,7 @@ public class BuildTask implements BotTask {
         }
 
         try {
-            BuildStructure structure = llmFuture.join();
+            structure = llmFuture.join();
             AssistantMod.LOGGER.info("LLM returned {} blocks for \"{}\"",
                     structure.getBlocks().size(), description);
 
@@ -123,11 +134,8 @@ public class BuildTask implements BotTask {
                 return TickResult.FAILED;
             }
 
-            sortedBlocks = sortBlocksBFS(structure.getBlocks());
-            currentBlockIndex = 0;
-            totalPlaced = 0;
-            totalSkipped = 0;
-            phase = BuildPhase.SORTING;
+            phase = BuildPhase.VALIDATING;
+            validationWaitTicks = 0;
             return TickResult.CONTINUE;
         } catch (Exception e) {
             AssistantMod.LOGGER.error("LLM request failed: {}", e.getMessage());
@@ -135,10 +143,149 @@ public class BuildTask implements BotTask {
         }
     }
 
+    // --- Phase: VALIDATING ---
+
+    private TickResult tickValidating(AssistantBot bot) {
+        // If we're waiting for a correction response, poll it
+        if (correctionFuture != null) {
+            if (!correctionFuture.isDone()) {
+                validationWaitTicks++;
+                if (validationWaitTicks % LLM_WAIT_LOG_INTERVAL == 0) {
+                    int waitSeconds = validationWaitTicks * 5 / 20;
+                    AssistantMod.LOGGER.info("Still waiting for block correction response... ({}s elapsed)", waitSeconds);
+                }
+                return TickResult.CONTINUE;
+            }
+
+            // Process correction response
+            try {
+                Map<String, String> corrections = correctionFuture.join();
+                applyCorrectionResults(corrections);
+            } catch (Exception e) {
+                AssistantMod.LOGGER.warn("Block correction request failed: {}", e.getMessage());
+                AssistantMod.LOGGER.warn("Proceeding with build — invalid blocks will become air");
+            }
+            correctionFuture = null;
+
+            // After applying corrections, validate again
+            Set<String> stillInvalid = findInvalidBlockIds();
+            if (!stillInvalid.isEmpty()) {
+                AssistantMod.LOGGER.warn("After correction, {} block IDs are still invalid — they will become air: {}",
+                        stillInvalid.size(), stillInvalid);
+                for (String invalidId : stillInvalid) {
+                    structure.replaceBlockId(invalidId, "minecraft:air");
+                }
+            }
+
+            // Proceed to sorting
+            return transitionToSorting();
+        }
+
+        // First entry: validate all block IDs
+        Set<String> invalidIds = findInvalidBlockIds();
+
+        if (invalidIds.isEmpty()) {
+            AssistantMod.LOGGER.info("All block IDs validated successfully");
+            return transitionToSorting();
+        }
+
+        AssistantMod.LOGGER.warn("Found {} invalid block IDs: {}", invalidIds.size(), invalidIds);
+
+        if (correctionAttempted) {
+            // Already tried once — skip invalid blocks
+            AssistantMod.LOGGER.warn("Correction already attempted, proceeding with build — invalid blocks will become air");
+            for (String id : invalidIds) {
+                structure.replaceBlockId(id, "minecraft:air");
+            }
+            return transitionToSorting();
+        }
+
+        // Request corrections from LLM
+        correctionAttempted = true;
+        correctionFuture = llmClient.requestBlockCorrectionsAsync(invalidIds);
+        validationWaitTicks = 0;
+        AssistantMod.LOGGER.info("Requesting block corrections from LLM for {} invalid blocks", invalidIds.size());
+        return TickResult.CONTINUE;
+    }
+
+    /**
+     * Strips block state properties (e.g., [axis=y]) from a block ID string.
+     */
+    private static String stripBlockState(String blockId) {
+        int bracketIdx = blockId.indexOf('[');
+        return bracketIdx >= 0 ? blockId.substring(0, bracketIdx) : blockId;
+    }
+
+    /**
+     * Find all block IDs in the structure that don't exist in the Minecraft registry.
+     */
+    private Set<String> findInvalidBlockIds() {
+        Set<String> invalid = new HashSet<>();
+        for (String blockId : structure.getUniqueBlockIds()) {
+            // Strip block state properties like [axis=y] for registry lookup
+            String baseId = stripBlockState(blockId);
+
+            // Skip air — it's always valid
+            if (baseId.equals("minecraft:air")) continue;
+
+            Identifier id = Identifier.tryParse(baseId);
+            if (id == null) {
+                invalid.add(blockId);
+                continue;
+            }
+
+            Block block = Registries.BLOCK.get(id);
+            if (block == Blocks.AIR) {
+                // Registry returns AIR for unknown IDs
+                invalid.add(blockId);
+            }
+        }
+        return invalid;
+    }
+
+    /**
+     * Apply LLM-provided corrections to the structure, validating each replacement.
+     */
+    private void applyCorrectionResults(Map<String, String> corrections) {
+        for (Map.Entry<String, String> entry : corrections.entrySet()) {
+            String invalidId = entry.getKey();
+            String replacement = entry.getValue();
+
+            // Validate the replacement
+            String baseReplacement = stripBlockState(replacement);
+            Identifier id = Identifier.tryParse(baseReplacement);
+            if (id == null) {
+                AssistantMod.LOGGER.warn("LLM suggested invalid replacement ID: {} -> {}", invalidId, replacement);
+                continue;
+            }
+
+            Block block = Registries.BLOCK.get(id);
+            if (block == Blocks.AIR && !baseReplacement.equals("minecraft:air")) {
+                AssistantMod.LOGGER.warn("LLM suggested unknown replacement block: {} -> {}", invalidId, replacement);
+                continue;
+            }
+
+            AssistantMod.LOGGER.info("Replacing invalid block: {} -> {}", invalidId, replacement);
+            structure.replaceBlockId(invalidId, replacement);
+        }
+    }
+
+    /**
+     * Transition from VALIDATING to SORTING by extracting blocks and computing placement order.
+     */
+    private TickResult transitionToSorting() {
+        sortedBlocks = sortBlocksBFS(structure.getBlocks());
+        currentBlockIndex = 0;
+        totalPlaced = 0;
+        totalSkipped = 0;
+        phase = BuildPhase.SORTING;
+        return TickResult.CONTINUE;
+    }
+
     // --- Phase: SORTING (instant transition) ---
 
     private TickResult tickSorting(AssistantBot bot) {
-        // Sorting already done in tickRequesting. Compute bounding box and start clearing.
+        // Sorting already done in transitionToSorting. Compute bounding box and start clearing.
         computeClearBounds();
         clearCurrentY = clearMax.getY(); // clear top-down so trees/leaves fall naturally
         totalCleared = 0;
@@ -411,6 +558,13 @@ public class BuildTask implements BotTask {
             case REQUESTING -> {
                 int waitSeconds = llmWaitTicks * 5 / 20;
                 yield "building: waiting for LLM... (" + waitSeconds + "s, " + description + ")";
+            }
+            case VALIDATING -> {
+                if (correctionFuture != null) {
+                    int waitSeconds = validationWaitTicks * 5 / 20;
+                    yield "building: waiting for block corrections... (" + waitSeconds + "s)";
+                }
+                yield "building: validating block IDs...";
             }
             case SORTING -> "building: planning placement order...";
             case CLEARING -> {
