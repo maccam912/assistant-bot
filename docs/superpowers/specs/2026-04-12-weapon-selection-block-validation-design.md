@@ -21,18 +21,18 @@ Two independent features:
 
 **`InventoryHelper.equipBestWeapon(ServerPlayerEntity)`** — Replace the priority-based system with damage-value comparison:
 - Iterate all inventory slots.
-- For each item that is a sword (`ItemTags.SWORDS`) or axe (`instanceof AxeItem`), read its attack damage from the item's attribute modifiers.
-- Track the best weapon by highest damage. Tie-break: prefer swords over axes (swords get a slight bonus in comparison).
+- For each item that is a sword (`ItemTags.SWORDS`) or axe (`instanceof AxeItem`), extract its attack damage using `stack.getAttributeModifiers(EquipmentSlot.MAINHAND)`, look up `EntityAttributes.GENERIC_ATTACK_DAMAGE`, sum the modifier values, and add the base attack damage of 1.0 to get the effective damage.
+- Track the best weapon by highest effective damage. Tie-break: when damage values are equal, prefer swords over axes.
 - Equip the winner to main hand via the existing `moveToHand()` helper.
 
-**Bot spawn (in `AssistantBot` or `AssistantManager`)** — After creating the `BotPlayer`, call `setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.NETHERITE_SWORD))` so the bot spawns armed.
+**Bot spawn (in `AssistantBot` constructor)** — After creating the `BotPlayer`, call `setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.NETHERITE_SWORD))` so the bot spawns armed.
 
 ### Files Changed
 
 | File | Change |
 |------|--------|
 | `InventoryHelper.java` | Rewrite `equipBestWeapon()` to compare attack damage values |
-| `AssistantBot.java` or `AssistantManager.java` | Give netherite sword at spawn |
+| `AssistantBot.java` | Give netherite sword at spawn in constructor |
 
 ---
 
@@ -70,15 +70,22 @@ minecraft:mossy_brick -> minecraft:mossy_stone_bricks
 
 **Correction parsing:**
 - Split response by newlines.
-- For each line matching the pattern `<invalid> -> <replacement>`, extract the pair.
+- For each line, skip lines that don't contain ` -> ` (LLM may include commentary or blank lines — lenient parsing, same philosophy as the VXB-1 parser).
+- For lines matching the pattern `<invalid> -> <replacement>`, extract the pair (trim whitespace).
 - Validate the replacement against the registry.
 - If a replacement is also invalid after 1 retry round, skip that block (it becomes air) and log a warning.
 
-**Substitution:**
-- `BuildStructure` gets a new `replaceBlockId(String oldId, String newId)` method that updates all `BlockEntry` objects with matching `blockId`.
-- `BuildStructure` gets a new `getUniqueBlockIds()` method returning `Set<String>`.
+**Substitution strategy:**
+- Since `BlockEntry` is a record (immutable), `BuildStructure` gets a `replaceBlockId(String oldId, String newId)` method that rebuilds the entries list, creating new `BlockEntry` records with the updated `blockId` for any entry matching `oldId`.
+- `BuildStructure` gets a `getUniqueBlockIds()` method returning `Set<String>` (all distinct blockId values from entries).
+
+**Async pattern for VALIDATING phase:**
+- Follows the same pattern as the existing `REQUESTING` phase: store the `CompletableFuture<Map<String, String>>` from `requestBlockCorrectionsAsync()`, poll `isDone()` each tick, log a waiting message periodically (~12 seconds).
+- On first entry to `VALIDATING` (before any async call), perform synchronous registry validation. If no invalid blocks, transition immediately to `SORTING`. If invalid blocks found, fire the async correction request and poll.
 
 **Retry policy:** 1 correction attempt. If the replacement is still invalid, the block is skipped (becomes air) with a logged warning.
+
+**Status string:** `getStatusString()` returns a `VALIDATING` status message (e.g., "Validating block IDs..." or "Waiting for block corrections from LLM...").
 
 ### State Machine (Updated)
 
@@ -90,9 +97,9 @@ REQUESTING -> VALIDATING -> SORTING -> CLEARING -> PLACING -> DONE
 
 | File | Change |
 |------|--------|
-| `BuildTask.java` | Add `VALIDATING` phase, validation logic, substitution application |
+| `BuildTask.java` | Add `VALIDATING` phase, validation logic, substitution application, status string update |
 | `LlmClient.java` | Add `requestBlockCorrectionsAsync()` method |
-| `BuildStructure.java` | Add `replaceBlockId()` and `getUniqueBlockIds()` methods; make `BlockEntry` list mutable or provide replacement mechanism |
+| `BuildStructure.java` | Add `replaceBlockId()` (rebuilds entry list with new records) and `getUniqueBlockIds()` methods |
 
 ---
 
