@@ -15,6 +15,9 @@ import java.net.http.HttpTimeoutException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -169,6 +172,86 @@ public class LlmClient {
                 throw new RuntimeException("LLM request failed: " + e.getMessage(), e);
             }
         });
+    }
+
+    /**
+     * Ask the LLM to suggest valid replacements for invalid block IDs.
+     * Returns a CompletableFuture resolving to a map of oldId -> newId.
+     *
+     * @param invalidBlocks set of block IDs that were not found in the Minecraft registry
+     * @return CompletableFuture resolving to a correction map
+     */
+    public CompletableFuture<Map<String, String>> requestBlockCorrectionsAsync(Set<String> invalidBlocks) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return requestBlockCorrections(invalidBlocks);
+            } catch (Exception e) {
+                throw new RuntimeException("Block correction request failed: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    /**
+     * Synchronous block correction call. Should NOT be called on the server thread.
+     */
+    private Map<String, String> requestBlockCorrections(Set<String> invalidBlocks) throws Exception {
+        String baseUrl = requireEnv("OPENROUTER_BASE_URL");
+        String apiKey = requireEnv("OPENROUTER_API_KEY");
+        String model = readModel();
+
+        String url = baseUrl.replaceAll("/+$", "") + "/chat/completions";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("The following block IDs from your VXB-1 output are not valid Minecraft 1.21.11 blocks:\n");
+        for (String blockId : invalidBlocks) {
+            sb.append("- ").append(blockId).append("\n");
+        }
+        sb.append("\nFor each invalid block, suggest a valid Minecraft 1.21.11 replacement block ID.\n");
+        sb.append("Reply with one correction per line in this exact format:\n");
+        sb.append("invalid_id -> replacement_id\n");
+        sb.append("\nExample:\n");
+        sb.append("minecraft:dark_wood_planks -> minecraft:dark_oak_planks\n");
+        sb.append("minecraft:mossy_brick -> minecraft:mossy_stone_bricks\n");
+
+        String userMessage = sb.toString();
+
+        AssistantMod.LOGGER.info("Requesting block corrections from LLM for {} invalid blocks", invalidBlocks.size());
+        String content = callApi(url, apiKey, model, userMessage, null, null);
+
+        return parseCorrectionResponse(content);
+    }
+
+    /**
+     * Parse the LLM's correction response. Lines that don't match the
+     * "invalid -> replacement" pattern are silently skipped (lenient parsing).
+     */
+    private Map<String, String> parseCorrectionResponse(String response) {
+        Map<String, String> corrections = new HashMap<>();
+        String[] lines = response.split("\\r?\\n");
+
+        for (String line : lines) {
+            String trimmed = line.trim();
+            int arrowIdx = trimmed.indexOf(" -> ");
+            if (arrowIdx < 0) continue; // skip lines without " -> " (commentary, blank lines, etc.)
+
+            String invalidId = trimmed.substring(0, arrowIdx).trim();
+            String replacement = trimmed.substring(arrowIdx + 4).trim();
+
+            // Strip backticks or other formatting the LLM might add
+            invalidId = invalidId.replace("`", "");
+            replacement = replacement.replace("`", "");
+
+            if (!invalidId.isEmpty() && !replacement.isEmpty()) {
+                // Ensure minecraft: namespace
+                if (!replacement.contains(":")) {
+                    replacement = "minecraft:" + replacement;
+                }
+                corrections.put(invalidId, replacement);
+            }
+        }
+
+        AssistantMod.LOGGER.info("Parsed {} block corrections from LLM response", corrections.size());
+        return corrections;
     }
 
     /**
