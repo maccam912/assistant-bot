@@ -8,8 +8,11 @@ import com.assistantbot.task.IdleTask;
 import com.assistantbot.task.TickResult;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.entity.Entity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
@@ -54,6 +57,9 @@ public class AssistantBot {
                 ownerPos.x + 1, ownerPos.y, ownerPos.z + 1,
                 owner.getYaw(), owner.getPitch()
         );
+
+        // Arm the bot with a netherite sword
+        this.botPlayer.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.NETHERITE_SWORD));
 
         this.currentTask = new IdleTask();
         this.lastKnownHealth = botPlayer.getHealth();
