@@ -22,7 +22,7 @@ The bot is driven by a tick-based state machine and supports task interrupts
 ./gradlew build
 ```
 
-Output jar: `build/libs/assistant-bot-0.1.0.jar`
+Output jar: `build/libs/assistant-bot-<version>.jar`
 
 ## Commands
 
@@ -50,10 +50,10 @@ Output jar: `build/libs/assistant-bot-0.1.0.jar`
 
 ## Tech Stack
 
-- Minecraft 1.20.1
-- Fabric Loader ≥0.15
+- Minecraft 1.21.11
+- Fabric Loader ≥0.18
 - Fabric API (FakePlayer, commands, events)
-- Java 17 target (compiles with 17–22)
+- Java 21
 
 ## Inspiration
 
