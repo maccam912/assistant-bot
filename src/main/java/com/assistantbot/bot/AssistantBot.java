@@ -3,8 +3,10 @@ package com.assistantbot.bot;
 import com.assistantbot.AssistantMod;
 import com.assistantbot.nav.BotPathfinder;
 import com.assistantbot.task.BotTask;
+import com.assistantbot.task.BuildTask;
 import com.assistantbot.task.CombatTask;
 import com.assistantbot.task.IdleTask;
+import com.assistantbot.task.PlanTask;
 import com.assistantbot.task.TickResult;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.entity.Entity;
@@ -122,6 +124,17 @@ public class AssistantBot {
     }
 
     private void onTaskComplete() {
+        // Auto-execute chaining: if PlanTask completed with autoExecute, start BuildTask
+        if (currentTask instanceof PlanTask planTask && planTask.isAutoExecute()) {
+            int planId = planTask.getLastPlanId();
+            if (planId > 0) {
+                AssistantMod.LOGGER.info("Plan #{} complete, auto-executing build at {}", planId, getBlockPos());
+                currentTask = new BuildTask(planId, getBlockPos());
+                currentTask.onStart(this);
+                return;
+            }
+        }
+
         if (currentTask instanceof CombatTask && savedTask != null) {
             AssistantMod.LOGGER.info("Combat complete, resuming previous task");
             currentTask = savedTask;
