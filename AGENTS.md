@@ -12,7 +12,7 @@ The bot is driven by a tick-based state machine and supports task interrupts
   current `BotTask`, detects combat interrupts via health-drop, saves/restores tasks.
 - **BotTask** interface — Each task is a mini state machine with `tick()`, `onStart()`,
   `onStop()`, `getStatusString()`. Returns `TickResult` (CONTINUE / COMPLETE / FAILED).
-- **Tasks**: IdleTask, FollowTask, MineTask, PlaceTask, DepositTask, CombatTask
+- **Tasks**: IdleTask, FollowTask, MineTask, PlaceTask, DepositTask, CombatTask, PlanTask, BuildTask
 - **Utilities**: NavigationHelper (movement), LookHelper (yaw/pitch), InventoryHelper
   (equip/deposit), BlockHelper (break/place)
 
@@ -35,6 +35,10 @@ Output jar: `build/libs/assistant-bot-<version>.jar`
 | `/assistant mine <x> <y> <z>` | Mine block at position |
 | `/assistant place <block> <x> <y> <z>` | Place a block |
 | `/assistant deposit` | Deposit inventory into nearest container |
+| `/assistant plan <description>` | Generate a build plan from LLM, returns plan ID |
+| `/assistant execute <id>` | Execute a stored plan at bot's current position |
+| `/assistant plans` | List all available build plans |
+| `/assistant build <description>` | Plan + auto-execute (convenience shortcut) |
 | `/assistant status` | Show current task and position |
 
 ## Design Decisions
