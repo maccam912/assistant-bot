@@ -30,6 +30,9 @@ fabric-*.accesswidener
 # Environment variables (secrets)
 .env
 
+# Local git worktrees
+.worktrees/
+
 # OS
 .DS_Store
 Thumbs.db
