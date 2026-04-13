@@ -2,8 +2,11 @@ package com.assistantbot.command;
 
 import com.assistantbot.AssistantManager;
 import com.assistantbot.bot.AssistantBot;
+import com.assistantbot.llm.BuildPlan;
+import com.assistantbot.llm.BuildPlanRegistry;
 import com.assistantbot.task.*;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.command.argument.BlockPosArgumentType;
@@ -17,15 +20,18 @@ import net.minecraft.util.math.BlockPos;
  * Brigadier command tree for /assistant.
  *
  * Commands:
- *   /assistant summon          — spawn your personal bot
- *   /assistant dismiss         — remove your bot
- *   /assistant follow | come   — bot follows you
- *   /assistant stop            — bot goes idle
- *   /assistant mine <pos>      — mine block at position
+ *   /assistant summon              — spawn your personal bot
+ *   /assistant dismiss             — remove your bot
+ *   /assistant follow | come       — bot follows you
+ *   /assistant stop                — bot goes idle
+ *   /assistant mine <pos>          — mine block at position
  *   /assistant place <block> <pos> — place block
- *   /assistant deposit         — deposit inventory into nearest container
- *   /assistant build <description> — ask LLM to build something
- *   /assistant status          — show current task and position
+ *   /assistant deposit             — deposit inventory into nearest container
+ *   /assistant plan <description>  — generate a build plan (LLM), returns plan ID
+ *   /assistant execute <id>        — execute a stored plan at bot's current position
+ *   /assistant plans               — list all available build plans
+ *   /assistant build <description> — plan + auto-execute (convenience)
+ *   /assistant status              — show current task and position
  */
 public class AssistantCommand {
 
@@ -54,6 +60,14 @@ public class AssistantCommand {
                 .then(CommandManager.literal("build")
                     .then(CommandManager.argument("description", StringArgumentType.greedyString())
                         .executes(AssistantCommand::build)))
+                .then(CommandManager.literal("plan")
+                    .then(CommandManager.argument("description", StringArgumentType.greedyString())
+                        .executes(AssistantCommand::plan)))
+                .then(CommandManager.literal("execute")
+                    .then(CommandManager.argument("id", IntegerArgumentType.integer(1))
+                        .executes(AssistantCommand::execute)))
+                .then(CommandManager.literal("plans")
+                    .executes(AssistantCommand::listPlans))
                 .then(CommandManager.literal("status")
                     .executes(AssistantCommand::status))
         );
@@ -144,13 +158,79 @@ public class AssistantCommand {
         AssistantBot bot = requireBot(ctx);
         if (bot == null) return 0;
 
-        String description = StringArgumentType.getString(ctx, "description");
-        BlockPos origin = bot.getBlockPos();
+        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        if (player == null) return 0;
 
-        bot.setTask(new BuildTask(description, origin));
+        String description = StringArgumentType.getString(ctx, "description");
+
+        PlanTask planTask = new PlanTask(description, player);
+        planTask.setAutoExecute(true);
+        bot.setTask(planTask);
         ctx.getSource().sendFeedback(
-                () -> Text.literal("§a[Assistant] Building: " + description + " (asking LLM...)"),
+                () -> Text.literal("§a[Assistant] Planning and building: " + description + " (asking LLM...)"),
                 false);
+        return 1;
+    }
+
+    private static int plan(CommandContext<ServerCommandSource> ctx) {
+        AssistantBot bot = requireBot(ctx);
+        if (bot == null) return 0;
+
+        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        if (player == null) return 0;
+
+        String description = StringArgumentType.getString(ctx, "description");
+
+        bot.setTask(new PlanTask(description, player));
+        ctx.getSource().sendFeedback(
+                () -> Text.literal("§a[Assistant] Planning: " + description + " (asking LLM...)"),
+                false);
+        return 1;
+    }
+
+    private static int execute(CommandContext<ServerCommandSource> ctx) {
+        AssistantBot bot = requireBot(ctx);
+        if (bot == null) return 0;
+
+        int planId = IntegerArgumentType.getInteger(ctx, "id");
+        BuildPlan plan = BuildPlanRegistry.getInstance().get(planId);
+
+        if (plan == null) {
+            ctx.getSource().sendFeedback(
+                    () -> Text.literal("§c[Assistant] No plan found with ID: " + planId),
+                    false);
+            return 0;
+        }
+
+        BlockPos origin = bot.getBlockPos();
+        bot.setTask(new BuildTask(planId, origin));
+        ctx.getSource().sendFeedback(
+                () -> Text.literal("§a[Assistant] Executing plan #" + planId + " (" + plan.getDescription()
+                        + " — " + plan.getBlockCount() + " blocks) at " + origin.toShortString()),
+                false);
+        return 1;
+    }
+
+    private static int listPlans(CommandContext<ServerCommandSource> ctx) {
+        var plans = BuildPlanRegistry.getInstance().getAll();
+
+        if (plans.isEmpty()) {
+            ctx.getSource().sendFeedback(
+                    () -> Text.literal("§e[Assistant] No plans available. Use /assistant plan <description> to create one."),
+                    false);
+            return 1;
+        }
+
+        StringBuilder sb = new StringBuilder("§b[Assistant] Available plans:");
+        for (BuildPlan plan : plans) {
+            sb.append("\n  §f#").append(plan.getId())
+              .append(": \"").append(plan.getDescription())
+              .append("\" — ").append(plan.getBlockCount())
+              .append(" blocks (by ").append(plan.getCreatorName()).append(")");
+        }
+
+        String output = sb.toString();
+        ctx.getSource().sendFeedback(() -> Text.literal(output), false);
         return 1;
     }
 
