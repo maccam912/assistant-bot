@@ -36,9 +36,12 @@ public class BuildTask implements BotTask {
 
     private enum BuildPhase { REQUESTING, VALIDATING, SORTING, CLEARING, PLACING, DONE }
 
-    private static final int MAX_APPROACH_TICKS = 20; // ~1 second, then place anyway
     private static final int MAX_RETRIES_PER_BLOCK = 3;
     private static final int LLM_WAIT_LOG_INTERVAL = 24; // log every ~12 seconds (24 ticks * 5 game ticks = 120 game ticks)
+    private static final double VISUAL_REPOSITION_START_DISTANCE = 2.0;
+    private static final double VISUAL_REPOSITION_TELEPORT_DISTANCE = 6.0;
+    private static final double VISUAL_SNAP_RADIUS = 1.5;
+    private static final double BUILD_VISUAL_MOVE_SPEED = 0.26;
 
     private final String description;
     private final BlockPos originPos;
@@ -57,7 +60,6 @@ public class BuildTask implements BotTask {
     // Placement state
     private List<BlockEntry> sortedBlocks;
     private int currentBlockIndex;
-    private int approachTicksRemaining;
     private Map<Integer, Integer> retryCount; // block index -> retry count
     private List<Integer> retryQueue; // block indices to retry
     private int totalPlaced;
@@ -326,7 +328,6 @@ public class BuildTask implements BotTask {
             // Done clearing
             AssistantMod.LOGGER.info("Clearing complete: {} blocks removed", totalCleared);
             phase = BuildPhase.PLACING;
-            approachTicksRemaining = MAX_APPROACH_TICKS;
             return TickResult.CONTINUE;
         }
 
@@ -364,6 +365,8 @@ public class BuildTask implements BotTask {
             if (!retryQueue.isEmpty()) {
                 return tickRetryQueue(bot);
             }
+            NavigationHelper.stopMoving(bot);
+            bot.getPathfinder().clearPath();
             phase = BuildPhase.DONE;
             AssistantMod.LOGGER.info("Build complete: {} placed, {} skipped",
                     totalPlaced, totalSkipped);
@@ -372,23 +375,7 @@ public class BuildTask implements BotTask {
 
         BlockEntry entry = sortedBlocks.get(currentBlockIndex);
         BlockPos worldPos = originPos.add(new Vec3i(entry.x(), entry.y(), entry.z()));
-        Vec3d targetCenter = Vec3d.ofCenter(worldPos);
-
-        // Look at the target block
-        LookHelper.lookAt(bot.getFakePlayer(), targetCenter);
-
-        // Try to walk toward it (smoke and mirrors)
-        double distance = bot.getPos().distanceTo(targetCenter);
-        if (distance > 4.0 && approachTicksRemaining > 0) {
-            NavigationHelper.navigateTo(bot, worldPos, NavigationHelper.WALK_SPEED);
-            approachTicksRemaining -= 5; // we tick every 5 game ticks
-            return TickResult.CONTINUE;
-        }
-
-        // Place the block
-        NavigationHelper.stopMoving(bot);
-        bot.getPathfinder().clearPath();
-        boolean placed = placeBlockServerEnforced(bot.getWorld(), worldPos, entry.blockId());
+        boolean placed = attemptPlacementThisTick(bot, entry);
 
         if (placed) {
             totalPlaced++;
@@ -407,12 +394,13 @@ public class BuildTask implements BotTask {
 
         // Move to next block
         currentBlockIndex++;
-        approachTicksRemaining = MAX_APPROACH_TICKS;
         return TickResult.CONTINUE;
     }
 
     private TickResult tickRetryQueue(AssistantBot bot) {
         if (retryQueue.isEmpty()) {
+            NavigationHelper.stopMoving(bot);
+            bot.getPathfinder().clearPath();
             phase = BuildPhase.DONE;
             return TickResult.COMPLETE;
         }
@@ -420,9 +408,7 @@ public class BuildTask implements BotTask {
         int blockIdx = retryQueue.remove(0);
         BlockEntry entry = sortedBlocks.get(blockIdx);
         BlockPos worldPos = originPos.add(new Vec3i(entry.x(), entry.y(), entry.z()));
-
-        LookHelper.lookAt(bot.getFakePlayer(), Vec3d.ofCenter(worldPos));
-        boolean placed = placeBlockServerEnforced(bot.getWorld(), worldPos, entry.blockId());
+        boolean placed = attemptPlacementThisTick(bot, entry);
 
         if (placed) {
             totalPlaced++;
@@ -438,6 +424,62 @@ public class BuildTask implements BotTask {
         }
 
         return TickResult.CONTINUE;
+    }
+
+    private boolean attemptPlacementThisTick(AssistantBot bot, BlockEntry entry) {
+        BlockPos worldPos = originPos.add(new Vec3i(entry.x(), entry.y(), entry.z()));
+        Vec3d targetCenter = Vec3d.ofCenter(worldPos);
+        double distance = bot.getPos().distanceTo(targetCenter);
+
+        if (distance > VISUAL_REPOSITION_TELEPORT_DISTANCE) {
+            NavigationHelper.teleportNear(bot, targetCenter);
+            snapCloseToTarget(bot, targetCenter);
+            NavigationHelper.moveToward(bot, targetCenter, BUILD_VISUAL_MOVE_SPEED);
+        } else if (distance > VISUAL_REPOSITION_START_DISTANCE) {
+            NavigationHelper.navigateTo(bot, worldPos, BUILD_VISUAL_MOVE_SPEED);
+            snapCloseToTarget(bot, targetCenter);
+        } else {
+            NavigationHelper.moveToward(bot, targetCenter, BUILD_VISUAL_MOVE_SPEED);
+        }
+
+        LookHelper.lookAt(bot.getFakePlayer(), targetCenter);
+        return placeBlockServerEnforced(bot.getWorld(), worldPos, entry.blockId());
+    }
+
+    private void snapCloseToTarget(AssistantBot bot, Vec3d targetCenter) {
+        var player = bot.getFakePlayer();
+        Vec3d currentPos = player.getEntityPos();
+        Vec3d delta = targetCenter.subtract(currentPos);
+        double distance = delta.length();
+
+        if (distance <= VISUAL_SNAP_RADIUS) {
+            return;
+        }
+
+        double step = Math.min(
+                distance,
+                Math.max(0.0, distance - VISUAL_SNAP_RADIUS)
+        );
+        if (step <= 0.0) {
+            return;
+        }
+
+        Vec3d snapped = currentPos.add(delta.normalize().multiply(step));
+        Vec3d bounded = new Vec3d(
+                clamp(snapped.x, clearMin.getX() + 0.5, clearMax.getX() + 0.5),
+                clamp(snapped.y, clearMin.getY(), clearMax.getY() + 1.0),
+                clamp(snapped.z, clearMin.getZ() + 0.5, clearMax.getZ() + 0.5)
+        );
+        player.refreshPositionAndAngles(
+                bounded.x,
+                bounded.y,
+                bounded.z,
+                player.getYaw(), player.getPitch()
+        );
+    }
+
+    private double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     // --- Block placement ---
