@@ -79,7 +79,7 @@ public class AssistantCommand {
                 .then(CommandManager.literal("plans")
                     .executes(AssistantCommand::listPlans))
                 .then(CommandManager.literal("import")
-                    .then(CommandManager.argument("url", StringArgumentType.word())
+                    .then(CommandManager.argument("url", StringArgumentType.string())
                         .then(CommandManager.argument("description", StringArgumentType.greedyString())
                             .executes(AssistantCommand::importPlan))))
                 .then(CommandManager.literal("status")
