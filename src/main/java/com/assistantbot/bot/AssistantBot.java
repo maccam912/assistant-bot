@@ -172,6 +172,9 @@ public class AssistantBot {
     }
 
     private void onLethalDamage() {
+        // Already downed — don't spam the log
+        if (downedUntilTick >= 0) return;
+
         int armor = botPlayer.getArmor();
         if (armor >= ARMOR_THRESHOLD) {
             AssistantMod.LOGGER.info("Lethal damage absorbed by armor (armor={}), no slowdown", armor);

@@ -93,6 +93,10 @@ public class BuildStructure {
         // Strip markdown code fences if the LLM wrapped the output
         String cleaned = stripCodeFences(vxb).trim();
 
+        // Normalize Unicode dash variants (en dash, em dash, minus sign) to hyphen-minus.
+        // Some LLMs (e.g., Gemini Flash) emit these in range syntax like "layer y 1–12".
+        cleaned = normalizeDashes(cleaned);
+
         if (cleaned.isEmpty()) {
             throw new IllegalArgumentException("Empty VXB-1 input");
         }
@@ -347,6 +351,17 @@ public class BuildStructure {
 
         // Allow air in the palette (it's used by '.' convention but could be mapped to other symbols too)
         palette.put(symbol, blockId);
+    }
+
+    /**
+     * Normalize Unicode dash-like characters to ASCII hyphen-minus.
+     * LLMs sometimes emit en dash (U+2013), em dash (U+2014), or
+     * minus sign (U+2212) instead of hyphen-minus (U+002D).
+     */
+    private static String normalizeDashes(String input) {
+        return input.replace('\u2013', '-')  // en dash
+                    .replace('\u2014', '-')  // em dash
+                    .replace('\u2212', '-'); // minus sign
     }
 
     /**
