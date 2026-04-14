@@ -417,4 +417,67 @@ public class BuildStructure {
         if ((z & 0x100000) != 0) z |= ~0x1FFFFF;
         return new int[]{x, y, z};
     }
+
+    // --- BFS sort for realistic placement order ---
+
+    /**
+     * Sort blocks so each one is placed only when it has a face-adjacent
+     * neighbor that's already placed (or is on the ground, y=0).
+     *
+     * This gives the visual appearance of building with structural support:
+     * ground layer first, then blocks connected to already-placed blocks.
+     * Orphan blocks (floating, no path to ground) are appended at the end
+     * sorted by Y ascending.
+     */
+    public static List<BlockEntry> sortBlocksBFS(List<BlockEntry> blocks) {
+        Map<Long, BlockEntry> posMap = new HashMap<>();
+        for (BlockEntry entry : blocks) {
+            posMap.put(packPos(entry.x(), entry.y(), entry.z()), entry);
+        }
+
+        Set<Long> placed = new HashSet<>();
+        List<BlockEntry> sorted = new ArrayList<>();
+        Queue<BlockEntry> ready = new LinkedList<>();
+
+        for (BlockEntry entry : blocks) {
+            if (entry.y() == 0) {
+                long key = packPos(entry.x(), entry.y(), entry.z());
+                if (placed.add(key)) {
+                    ready.add(entry);
+                }
+            }
+        }
+
+        int[][] directions = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
+
+        while (!ready.isEmpty()) {
+            BlockEntry current = ready.poll();
+            sorted.add(current);
+
+            for (int[] dir : directions) {
+                int nx = current.x() + dir[0];
+                int ny = current.y() + dir[1];
+                int nz = current.z() + dir[2];
+                long nKey = packPos(nx, ny, nz);
+
+                if (posMap.containsKey(nKey) && placed.add(nKey)) {
+                    ready.add(posMap.get(nKey));
+                }
+            }
+        }
+
+        List<BlockEntry> orphans = new ArrayList<>();
+        for (BlockEntry entry : blocks) {
+            long key = packPos(entry.x(), entry.y(), entry.z());
+            if (!placed.contains(key)) {
+                orphans.add(entry);
+            }
+        }
+        orphans.sort(Comparator.comparingInt(BlockEntry::y)
+                .thenComparingInt(BlockEntry::x)
+                .thenComparingInt(BlockEntry::z));
+        sorted.addAll(orphans);
+
+        return sorted;
+    }
 }

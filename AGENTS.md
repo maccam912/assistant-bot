@@ -39,6 +39,7 @@ Output jar: `build/libs/assistant-bot-<version>.jar`
 | `/assistant execute <id>` | Execute a stored plan at bot's current position |
 | `/assistant plans` | List all available build plans |
 | `/assistant build <description>` | Plan + auto-execute (convenience shortcut) |
+| `/assistant import <url> <description>` | Import a VXB-1 plan from a URL |
 | `/assistant status` | Show current task and position |
 
 ## Design Decisions

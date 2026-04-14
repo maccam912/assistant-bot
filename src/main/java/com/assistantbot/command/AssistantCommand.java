@@ -1,9 +1,11 @@
 package com.assistantbot.command;
 
 import com.assistantbot.AssistantManager;
+import com.assistantbot.AssistantMod;
 import com.assistantbot.bot.AssistantBot;
 import com.assistantbot.llm.BuildPlan;
 import com.assistantbot.llm.BuildPlanRegistry;
+import com.assistantbot.llm.BuildStructure;
 import com.assistantbot.task.*;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -15,6 +17,13 @@ import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Brigadier command tree for /assistant.
@@ -30,6 +39,7 @@ import net.minecraft.util.math.BlockPos;
  *   /assistant plan <description>  — generate a build plan (LLM), returns plan ID
  *   /assistant execute <id>        — execute a stored plan at bot's current position
  *   /assistant plans               — list all available build plans
+ *   /assistant import <url> <desc> — import a VXB-1 plan from a URL
  *   /assistant build <description> — plan + auto-execute (convenience)
  *   /assistant status              — show current task and position
  */
@@ -68,6 +78,10 @@ public class AssistantCommand {
                         .executes(AssistantCommand::execute)))
                 .then(CommandManager.literal("plans")
                     .executes(AssistantCommand::listPlans))
+                .then(CommandManager.literal("import")
+                    .then(CommandManager.argument("url", StringArgumentType.word())
+                        .then(CommandManager.argument("description", StringArgumentType.greedyString())
+                            .executes(AssistantCommand::importPlan))))
                 .then(CommandManager.literal("status")
                     .executes(AssistantCommand::status))
         );
@@ -231,6 +245,91 @@ public class AssistantCommand {
 
         String output = sb.toString();
         ctx.getSource().sendFeedback(() -> Text.literal(output), false);
+        return 1;
+    }
+
+    private static int importPlan(CommandContext<ServerCommandSource> ctx) {
+        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        if (player == null) return 0;
+
+        String url = StringArgumentType.getString(ctx, "url");
+        String description = StringArgumentType.getString(ctx, "description");
+        String creatorName = player.getName().getString();
+
+        // Validate URL format
+        URI uri;
+        try {
+            uri = URI.create(url);
+            if (uri.getScheme() == null || (!uri.getScheme().equals("http") && !uri.getScheme().equals("https"))) {
+                ctx.getSource().sendFeedback(
+                        () -> Text.literal("§c[Assistant] Invalid URL — must start with http:// or https://"),
+                        false);
+                return 0;
+            }
+        } catch (Exception e) {
+            ctx.getSource().sendFeedback(
+                    () -> Text.literal("§c[Assistant] Invalid URL: " + e.getMessage()),
+                    false);
+            return 0;
+        }
+
+        ctx.getSource().sendFeedback(
+                () -> Text.literal("§e[Assistant] Importing plan from URL..."),
+                false);
+
+        // Fetch, parse, sort, and store on a background thread
+        var server = ctx.getSource().getServer();
+        CompletableFuture.supplyAsync(() -> {
+            try {
+                HttpClient httpClient = HttpClient.newBuilder()
+                        .connectTimeout(Duration.ofSeconds(10))
+                        .followRedirects(HttpClient.Redirect.NORMAL)
+                        .build();
+
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(uri)
+                        .timeout(Duration.ofSeconds(30))
+                        .GET()
+                        .build();
+
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+                if (response.statusCode() != 200) {
+                    return "§c[Assistant] Import failed: HTTP " + response.statusCode();
+                }
+
+                String content = response.body();
+                BuildStructure structure = BuildStructure.parse(content);
+
+                if (structure.getBlocks().isEmpty()) {
+                    return "§c[Assistant] Import failed: parsed structure has no blocks";
+                }
+
+                var sortedBlocks = BuildStructure.sortBlocksBFS(structure.getBlocks());
+                int planId = BuildPlanRegistry.getInstance().store(description, creatorName, sortedBlocks);
+
+                AssistantMod.LOGGER.info("Imported plan #{} from URL ({} blocks, description: \"{}\")",
+                        planId, sortedBlocks.size(), description);
+
+                return "§a[Assistant] Plan imported! ID: " + planId + " (" + description
+                        + " — " + sortedBlocks.size() + " blocks)";
+
+            } catch (IllegalArgumentException parseError) {
+                AssistantMod.LOGGER.warn("Import parse failed: {}", parseError.getMessage());
+                return "§c[Assistant] Import failed — VXB-1 parse error: " + parseError.getMessage();
+            } catch (Exception e) {
+                AssistantMod.LOGGER.warn("Import fetch failed: {}", e.getMessage());
+                return "§c[Assistant] Import failed: " + e.getMessage();
+            }
+        }).thenAccept(message -> {
+            // Send result back on the server thread
+            server.execute(() -> {
+                if (!player.isDisconnected()) {
+                    player.sendMessage(Text.literal(message));
+                }
+            });
+        });
+
         return 1;
     }
 

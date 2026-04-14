@@ -230,7 +230,7 @@ public class PlanTask implements BotTask {
     }
 
     private TickResult transitionToSorting() {
-        sortedBlocks = sortBlocksBFS(structure.getBlocks());
+        sortedBlocks = BuildStructure.sortBlocksBFS(structure.getBlocks());
         phase = PlanPhase.SORTING;
         return TickResult.CONTINUE;
     }
@@ -253,64 +253,6 @@ public class PlanTask implements BotTask {
                 + " — " + sortedBlocks.size() + " blocks)");
         phase = PlanPhase.DONE;
         return TickResult.COMPLETE;
-    }
-
-    // --- BFS sort (extracted from BuildTask) ---
-
-    private List<BlockEntry> sortBlocksBFS(List<BlockEntry> blocks) {
-        Map<Long, BlockEntry> posMap = new HashMap<>();
-        for (BlockEntry entry : blocks) {
-            posMap.put(packPos(entry.x(), entry.y(), entry.z()), entry);
-        }
-
-        Set<Long> placed = new HashSet<>();
-        List<BlockEntry> sorted = new ArrayList<>();
-        Queue<BlockEntry> ready = new LinkedList<>();
-
-        for (BlockEntry entry : blocks) {
-            if (entry.y() == 0) {
-                long key = packPos(entry.x(), entry.y(), entry.z());
-                if (placed.add(key)) {
-                    ready.add(entry);
-                }
-            }
-        }
-
-        int[][] directions = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
-
-        while (!ready.isEmpty()) {
-            BlockEntry current = ready.poll();
-            sorted.add(current);
-
-            for (int[] dir : directions) {
-                int nx = current.x() + dir[0];
-                int ny = current.y() + dir[1];
-                int nz = current.z() + dir[2];
-                long nKey = packPos(nx, ny, nz);
-
-                if (posMap.containsKey(nKey) && placed.add(nKey)) {
-                    ready.add(posMap.get(nKey));
-                }
-            }
-        }
-
-        List<BlockEntry> orphans = new ArrayList<>();
-        for (BlockEntry entry : blocks) {
-            long key = packPos(entry.x(), entry.y(), entry.z());
-            if (!placed.contains(key)) {
-                orphans.add(entry);
-            }
-        }
-        orphans.sort(Comparator.comparingInt(BlockEntry::y)
-                .thenComparingInt(BlockEntry::x)
-                .thenComparingInt(BlockEntry::z));
-        sorted.addAll(orphans);
-
-        return sorted;
-    }
-
-    private long packPos(int x, int y, int z) {
-        return ((long)(x & 0x1FFFFF) << 42) | ((long)(y & 0x1FFFFF) << 21) | (z & 0x1FFFFF);
     }
 
     // --- Helpers ---
