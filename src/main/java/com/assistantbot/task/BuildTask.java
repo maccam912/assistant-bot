@@ -250,6 +250,10 @@ public class BuildTask implements BotTask {
     }
 
     private boolean attemptPlacementThisTick(AssistantBot bot, BlockEntry entry) {
+        // Skip air blocks — volume is already cleared, no need to navigate or place
+        if (entry.blockId().equals("minecraft:air") || entry.blockId().equals("air")) {
+            return true;
+        }
         BlockPos worldPos = originPos.add(new Vec3i(entry.x(), entry.y(), entry.z()));
         Vec3d targetCenter = Vec3d.ofCenter(worldPos);
         double distance = bot.getPos().distanceTo(targetCenter);

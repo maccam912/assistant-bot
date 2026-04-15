@@ -309,6 +309,11 @@ public class BuildStructure {
         for (Map.Entry<Long, String> entry : positionMap.entrySet()) {
             long packed = entry.getKey();
             String blockId = entry.getValue();
+            // Skip air blocks — the build volume is already cleared before placing,
+            // so air entries just waste time (navigate, fail, retry, skip).
+            if (blockId.equals("minecraft:air") || blockId.equals("air")) {
+                continue;
+            }
             int[] coords = unpackPos(packed);
             blocks.add(new BlockEntry(coords[0], coords[1], coords[2], blockId));
             materials.merge(blockId, 1, Integer::sum);
