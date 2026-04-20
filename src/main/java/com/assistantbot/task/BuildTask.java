@@ -37,6 +37,7 @@ public class BuildTask implements BotTask {
 
     private static final int MAX_RETRIES_PER_BLOCK = 3;
     private static final int WAIT_TICKS = 20; // 20 task-ticks * 5 game ticks = 100 game ticks = 5 seconds
+    private static final int BLOCKS_PER_TASK_TICK = 5; // 5 blocks * 4 task-ticks/sec = 20 blocks/sec
     private static final double VISUAL_REPOSITION_START_DISTANCE = 2.0;
     private static final double VISUAL_REPOSITION_TELEPORT_DISTANCE = 6.0;
     private static final double VISUAL_SNAP_RADIUS = 1.5;
@@ -183,40 +184,42 @@ public class BuildTask implements BotTask {
     // --- Phase: PLACING ---
 
     private TickResult tickPlacing(AssistantBot bot) {
-        if (currentBlockIndex >= sortedBlocks.size()) {
-            if (!retryQueue.isEmpty()) {
-                return tickRetryQueue(bot);
+        for (int i = 0; i < BLOCKS_PER_TASK_TICK; i++) {
+            if (currentBlockIndex >= sortedBlocks.size()) {
+                if (!retryQueue.isEmpty()) {
+                    return tickRetryQueue(bot);
+                }
+                NavigationHelper.stopMoving(bot);
+                bot.getPathfinder().clearPath();
+                phase = BuildPhase.DONE;
+                AssistantMod.LOGGER.info("Build complete: {} placed, {} skipped (plan #{})",
+                        totalPlaced, totalSkipped, planId);
+                sendMessage(bot, "§a[Assistant] Build complete! " + totalPlaced + " blocks placed"
+                        + (totalSkipped > 0 ? " (" + totalSkipped + " skipped)" : "")
+                        + " — plan #" + planId);
+                return TickResult.COMPLETE;
             }
-            NavigationHelper.stopMoving(bot);
-            bot.getPathfinder().clearPath();
-            phase = BuildPhase.DONE;
-            AssistantMod.LOGGER.info("Build complete: {} placed, {} skipped (plan #{})",
-                    totalPlaced, totalSkipped, planId);
-            sendMessage(bot, "§a[Assistant] Build complete! " + totalPlaced + " blocks placed"
-                    + (totalSkipped > 0 ? " (" + totalSkipped + " skipped)" : "")
-                    + " — plan #" + planId);
-            return TickResult.COMPLETE;
-        }
 
-        BlockEntry entry = sortedBlocks.get(currentBlockIndex);
-        BlockPos worldPos = originPos.add(new Vec3i(entry.x(), entry.y(), entry.z()));
-        boolean placed = attemptPlacementThisTick(bot, entry);
+            BlockEntry entry = sortedBlocks.get(currentBlockIndex);
+            BlockPos worldPos = originPos.add(new Vec3i(entry.x(), entry.y(), entry.z()));
+            boolean placed = attemptPlacementThisTick(bot, entry);
 
-        if (placed) {
-            totalPlaced++;
-        } else {
-            int retries = retryCount.getOrDefault(currentBlockIndex, 0);
-            if (retries < MAX_RETRIES_PER_BLOCK) {
-                retryCount.put(currentBlockIndex, retries + 1);
-                retryQueue.add(currentBlockIndex);
+            if (placed) {
+                totalPlaced++;
             } else {
-                totalSkipped++;
-                AssistantMod.LOGGER.warn("Skipping block at {} after {} retries",
-                        worldPos, MAX_RETRIES_PER_BLOCK);
+                int retries = retryCount.getOrDefault(currentBlockIndex, 0);
+                if (retries < MAX_RETRIES_PER_BLOCK) {
+                    retryCount.put(currentBlockIndex, retries + 1);
+                    retryQueue.add(currentBlockIndex);
+                } else {
+                    totalSkipped++;
+                    AssistantMod.LOGGER.warn("Skipping block at {} after {} retries",
+                            worldPos, MAX_RETRIES_PER_BLOCK);
+                }
             }
-        }
 
-        currentBlockIndex++;
+            currentBlockIndex++;
+        }
         return TickResult.CONTINUE;
     }
 
