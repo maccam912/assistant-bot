@@ -52,10 +52,33 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build
-        run: ./gradlew build
+        run: ./gradlew clean build
+
+      - name: Prepare release assets
+        run: |
+          rm -rf release-assets
+          mkdir -p release-assets
+          runtime_jars="$(find build/libs -maxdepth 1 -type f -name 'assistant-bot-*.jar' ! -name '*-sources.jar' | sort)"
+          runtime_count="$(printf '%s\n' "${runtime_jars}" | sed '/^$/d' | wc -l | tr -d ' ')"
+
+          if [ "${runtime_count}" != "1" ]; then
+            echo "Expected exactly one assistant-bot runtime JAR in build/libs, found ${runtime_count}" >&2
+            find build/libs -maxdepth 1 -type f -print >&2
+            exit 1
+          fi
+
+          runtime_jar="${runtime_jars}"
+          sources_jar="${runtime_jar%.jar}-sources.jar"
+
+          cp "${runtime_jar}" release-assets/assistant-bot.jar
+          cp "${runtime_jar}" release-assets/
+
+          if [ -f "${sources_jar}" ]; then
+            cp "${sources_jar}" release-assets/
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/libs/assistant-bot-*.jar
+          files: release-assets/*.jar
           generate_release_notes: true
