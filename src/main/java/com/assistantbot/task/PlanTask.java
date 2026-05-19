@@ -6,12 +6,8 @@ import com.assistantbot.llm.BuildPlanRegistry;
 import com.assistantbot.llm.BuildStructure;
 import com.assistantbot.llm.BuildStructure.BlockEntry;
 import com.assistantbot.llm.LlmClient;
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
-import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -21,11 +17,11 @@ import java.util.concurrent.CompletableFuture;
  * validates block IDs, BFS-sorts for placement order, and stores the
  * result in BuildPlanRegistry. Does NOT place any blocks.
  *
- * Phases: REQUESTING -> VALIDATING -> SORTING -> STORING -> DONE
+ * Phases: REQUESTING -> SORTING -> STORING -> DONE
  */
 public class PlanTask implements BotTask {
 
-    private enum PlanPhase { REQUESTING, VALIDATING, SORTING, STORING, DONE }
+    private enum PlanPhase { REQUESTING, SORTING, STORING, DONE }
 
     private static final int LLM_WAIT_LOG_INTERVAL = 24;
 
@@ -38,11 +34,8 @@ public class PlanTask implements BotTask {
     private final LlmClient llmClient;
     private int llmWaitTicks;
 
-    // Validation state
+    // Structure state
     private BuildStructure structure;
-    private CompletableFuture<Map<String, String>> correctionFuture;
-    private int validationWaitTicks;
-    private boolean correctionAttempted;
 
     // Sorting result
     private List<BlockEntry> sortedBlocks;
@@ -72,17 +65,12 @@ public class PlanTask implements BotTask {
             llmFuture.cancel(true);
             AssistantMod.LOGGER.info("PlanTask cancelled, LLM request aborted");
         }
-        if (correctionFuture != null && !correctionFuture.isDone()) {
-            correctionFuture.cancel(true);
-            AssistantMod.LOGGER.info("PlanTask cancelled, block correction request aborted");
-        }
     }
 
     @Override
     public TickResult tick(AssistantBot bot) {
         return switch (phase) {
             case REQUESTING -> tickRequesting();
-            case VALIDATING -> tickValidating();
             case SORTING -> tickSorting();
             case STORING -> tickStoring();
             case DONE -> TickResult.COMPLETE;
@@ -121,9 +109,7 @@ public class PlanTask implements BotTask {
                 }
             }
 
-            phase = PlanPhase.VALIDATING;
-            validationWaitTicks = 0;
-            return TickResult.CONTINUE;
+            return transitionToSorting();
         } catch (Exception e) {
             String causeMsg = e.getMessage();
             if (e.getCause() != null && e.getCause().getMessage() != null) {
@@ -141,111 +127,7 @@ public class PlanTask implements BotTask {
         }
     }
 
-    // --- Phase: VALIDATING ---
 
-    private TickResult tickValidating() {
-        if (correctionFuture != null) {
-            if (!correctionFuture.isDone()) {
-                validationWaitTicks++;
-                if (validationWaitTicks % LLM_WAIT_LOG_INTERVAL == 0) {
-                    int waitSeconds = validationWaitTicks * 5 / 20;
-                    AssistantMod.LOGGER.info("Still waiting for block correction response... ({}s elapsed)", waitSeconds);
-                }
-                return TickResult.CONTINUE;
-            }
-
-            try {
-                Map<String, String> corrections = correctionFuture.join();
-                applyCorrectionResults(corrections);
-            } catch (Exception e) {
-                AssistantMod.LOGGER.warn("Block correction request failed: {}", e.getMessage());
-                AssistantMod.LOGGER.warn("Proceeding with plan — invalid blocks will become air");
-            }
-            correctionFuture = null;
-
-            Set<String> stillInvalid = findInvalidBlockIds();
-            if (!stillInvalid.isEmpty()) {
-                AssistantMod.LOGGER.warn("After correction, {} block IDs are still invalid — they will become air: {}",
-                        stillInvalid.size(), stillInvalid);
-                for (String invalidId : stillInvalid) {
-                    structure.replaceBlockId(invalidId, "minecraft:air");
-                }
-            }
-
-            return transitionToSorting();
-        }
-
-        Set<String> invalidIds = findInvalidBlockIds();
-
-        if (invalidIds.isEmpty()) {
-            AssistantMod.LOGGER.info("All block IDs validated successfully");
-            return transitionToSorting();
-        }
-
-        AssistantMod.LOGGER.warn("Found {} invalid block IDs: {}", invalidIds.size(), invalidIds);
-
-        if (correctionAttempted) {
-            AssistantMod.LOGGER.warn("Correction already attempted, proceeding — invalid blocks will become air");
-            for (String id : invalidIds) {
-                structure.replaceBlockId(id, "minecraft:air");
-            }
-            return transitionToSorting();
-        }
-
-        correctionAttempted = true;
-        correctionFuture = llmClient.requestBlockCorrectionsAsync(invalidIds);
-        validationWaitTicks = 0;
-        AssistantMod.LOGGER.info("Requesting block corrections from LLM for {} invalid blocks", invalidIds.size());
-        return TickResult.CONTINUE;
-    }
-
-    private static String stripBlockState(String blockId) {
-        int bracketIdx = blockId.indexOf('[');
-        return bracketIdx >= 0 ? blockId.substring(0, bracketIdx) : blockId;
-    }
-
-    private Set<String> findInvalidBlockIds() {
-        Set<String> invalid = new HashSet<>();
-        for (String blockId : structure.getUniqueBlockIds()) {
-            String baseId = stripBlockState(blockId);
-            if (baseId.equals("minecraft:air")) continue;
-
-            Identifier id = Identifier.tryParse(baseId);
-            if (id == null) {
-                invalid.add(blockId);
-                continue;
-            }
-
-            Block block = Registries.BLOCK.get(id);
-            if (block == Blocks.AIR) {
-                invalid.add(blockId);
-            }
-        }
-        return invalid;
-    }
-
-    private void applyCorrectionResults(Map<String, String> corrections) {
-        for (Map.Entry<String, String> entry : corrections.entrySet()) {
-            String invalidId = entry.getKey();
-            String replacement = entry.getValue();
-
-            String baseReplacement = stripBlockState(replacement);
-            Identifier id = Identifier.tryParse(baseReplacement);
-            if (id == null) {
-                AssistantMod.LOGGER.warn("LLM suggested invalid replacement ID: {} -> {}", invalidId, replacement);
-                continue;
-            }
-
-            Block block = Registries.BLOCK.get(id);
-            if (block == Blocks.AIR && !baseReplacement.equals("minecraft:air")) {
-                AssistantMod.LOGGER.warn("LLM suggested unknown replacement block: {} -> {}", invalidId, replacement);
-                continue;
-            }
-
-            AssistantMod.LOGGER.info("Replacing invalid block: {} -> {}", invalidId, replacement);
-            structure.replaceBlockId(invalidId, replacement);
-        }
-    }
 
     private TickResult transitionToSorting() {
         sortedBlocks = BuildStructure.sortBlocksBFS(structure.getBlocks());
@@ -293,13 +175,6 @@ public class PlanTask implements BotTask {
             case REQUESTING -> {
                 int waitSeconds = llmWaitTicks * 5 / 20;
                 yield "planning: waiting for LLM... (" + waitSeconds + "s, " + description + ")";
-            }
-            case VALIDATING -> {
-                if (correctionFuture != null) {
-                    int waitSeconds = validationWaitTicks * 5 / 20;
-                    yield "planning: waiting for block corrections... (" + waitSeconds + "s)";
-                }
-                yield "planning: validating block IDs...";
             }
             case SORTING -> "planning: sorting placement order...";
             case STORING -> "planning: storing plan...";
