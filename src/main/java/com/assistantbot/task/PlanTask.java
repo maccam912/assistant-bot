@@ -113,12 +113,30 @@ public class PlanTask implements BotTask {
                 return TickResult.FAILED;
             }
 
+            // Print any architectural warnings to the player
+            if (structure.getDiagnostics() != null && structure.getDiagnostics().hasWarnings()) {
+                sendMessage("§e[Assistant] Warnings in plan layout:");
+                for (var d : structure.getDiagnostics().getWarnings()) {
+                    sendMessage("§e  - " + d.message() + (d.lineNum() != null ? " (Line " + d.lineNum() + ")" : ""));
+                }
+            }
+
             phase = PlanPhase.VALIDATING;
             validationWaitTicks = 0;
             return TickResult.CONTINUE;
         } catch (Exception e) {
-            AssistantMod.LOGGER.error("LLM request failed: {}", e.getMessage());
-            sendMessage("§c[Assistant] Plan failed: " + e.getMessage());
+            String causeMsg = e.getMessage();
+            if (e.getCause() != null && e.getCause().getMessage() != null) {
+                causeMsg = e.getCause().getMessage();
+            }
+            AssistantMod.LOGGER.error("LLM request failed: {}", causeMsg);
+            if (causeMsg != null && causeMsg.contains("\n")) {
+                for (String line : causeMsg.split("\n")) {
+                    sendMessage("§c" + line);
+                }
+            } else {
+                sendMessage("§c[Assistant] Plan failed: " + (causeMsg != null ? causeMsg : "unknown error"));
+            }
             return TickResult.FAILED;
         }
     }

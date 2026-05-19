@@ -254,9 +254,6 @@ public class LlmClient {
         return corrections;
     }
 
-    /**
-     * Synchronous LLM call. Should NOT be called on the server thread.
-     */
     private BuildStructure requestStructure(String description) throws Exception {
         String baseUrl = requireEnv("OPENROUTER_BASE_URL");
         String apiKey = requireEnv("OPENROUTER_API_KEY");
@@ -268,29 +265,47 @@ public class LlmClient {
         // First attempt
         AssistantMod.LOGGER.info("Requesting structure from LLM for: \"{}\"", description);
         String content = callApi(url, apiKey, model, userMessage, null, null);
-        try {
-            BuildStructure structure = BuildStructure.parse(content);
-            AssistantMod.LOGGER.info("LLM structure parsed successfully: {} blocks", structure.getBlocks().size());
-            return structure;
-        } catch (IllegalArgumentException parseError) {
-            AssistantMod.LOGGER.warn("First LLM parse failed ({}), sending repair request", parseError.getMessage());
-            AssistantMod.LOGGER.warn("Unparseable LLM response body (first 500 chars): {}",
+
+        // Run compiler diagnostics and architectural linter
+        VxbDiagnostics.DiagnosticResult firstResult = VxbDiagnostics.run(content);
+
+        if (firstResult.hasBlockers() || firstResult.hasWarnings()) {
+            AssistantMod.LOGGER.warn("First LLM attempt has diagnostics issues: blockers={}, warnings={}",
+                    firstResult.hasBlockers(), firstResult.hasWarnings());
+            AssistantMod.LOGGER.warn("Unparseable/imperfect LLM response body (first 500 chars): {}",
                     content.length() > 500 ? content.substring(0, 500) + "..." : content);
 
-            // Repair attempt: send the bad response back with the parse error
-            AssistantMod.LOGGER.info("Sending repair request to LLM...");
+            // Repair attempt: send the bad response back with the detailed diagnostic report
+            AssistantMod.LOGGER.info("Sending repair request to LLM with compiler diagnostic logs...");
+            String report = firstResult.getLlmReport();
             String repairContent = callApi(url, apiKey, model, userMessage, content,
-                    "Your response could not be parsed as VXB-1. Error: " + parseError.getMessage()
-                            + "\nPlease output ONLY the corrected VXB-1 text, starting with 'VXB-1' on the first line.");
+                    "Your previous response had the following VXB-1 compiler diagnostic errors and/or architectural warnings:\n" + report
+                            + "\nPlease output ONLY the corrected VXB-1 text, ensuring all blocker errors and warnings are resolved. Start with 'VXB-1' on the first line.");
+
+            VxbDiagnostics.DiagnosticResult repairResult = VxbDiagnostics.run(repairContent);
+            if (repairResult.hasBlockers()) {
+                AssistantMod.LOGGER.error("Repair response also failed with blocker errors:\n{}", repairResult.getLlmReport());
+                throw new IllegalArgumentException("VXB-1 blocker errors persist after repair attempt:\n" + repairResult.getLlmReport());
+            }
+
             try {
                 BuildStructure structure2 = BuildStructure.parse(repairContent);
+                structure2.setDiagnostics(repairResult);
                 AssistantMod.LOGGER.info("LLM repair parse succeeded: {} blocks", structure2.getBlocks().size());
                 return structure2;
             } catch (IllegalArgumentException repairParseError) {
                 AssistantMod.LOGGER.error("Repair response also failed to parse: {}", repairParseError.getMessage());
-                AssistantMod.LOGGER.error("Unparseable repair response body (first 500 chars): {}",
-                        repairContent.length() > 500 ? repairContent.substring(0, 500) + "..." : repairContent);
-                throw repairParseError;
+                throw new IllegalArgumentException("VXB-1 repair parsing failed: " + repairParseError.getMessage());
+            }
+        } else {
+            try {
+                BuildStructure structure = BuildStructure.parse(content);
+                structure.setDiagnostics(firstResult);
+                AssistantMod.LOGGER.info("LLM structure parsed successfully: {} blocks", structure.getBlocks().size());
+                return structure;
+            } catch (IllegalArgumentException parseError) {
+                AssistantMod.LOGGER.error("VXB-1 parsing failed: {}", parseError.getMessage());
+                throw new IllegalArgumentException("VXB-1 parsing failed: " + parseError.getMessage());
             }
         }
     }

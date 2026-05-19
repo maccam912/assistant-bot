@@ -21,14 +21,18 @@ public class BuildStructure {
 
     private final List<BlockEntry> blocks;
     private final Map<String, Integer> materials;
+    private VxbDiagnostics.DiagnosticResult diagnostics;
 
     public BuildStructure(List<BlockEntry> blocks, Map<String, Integer> materials) {
         this.blocks = blocks;
         this.materials = materials;
+        this.diagnostics = new VxbDiagnostics.DiagnosticResult();
     }
 
     public List<BlockEntry> getBlocks() { return blocks; }
     public Map<String, Integer> getMaterials() { return materials; }
+    public VxbDiagnostics.DiagnosticResult getDiagnostics() { return diagnostics; }
+    public void setDiagnostics(VxbDiagnostics.DiagnosticResult diagnostics) { this.diagnostics = diagnostics; }
 
     /**
      * Returns all unique block IDs used in the structure.

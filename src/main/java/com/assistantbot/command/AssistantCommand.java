@@ -299,6 +299,19 @@ public class AssistantCommand {
                 }
 
                 String content = response.body();
+                var diagResult = com.assistantbot.llm.VxbDiagnostics.run(content);
+                if (diagResult.hasBlockers()) {
+                    return "§c[Assistant] Import failed — VXB-1 blocker errors:\n" + diagResult.getLlmReport();
+                }
+
+                StringBuilder resultMsg = new StringBuilder();
+                if (diagResult.hasWarnings()) {
+                    resultMsg.append("§e[Assistant] Warnings in imported plan:\n");
+                    for (var d : diagResult.getWarnings()) {
+                        resultMsg.append("§e  - ").append(d.message()).append(d.lineNum() != null ? " (Line " + d.lineNum() + ")" : "").append("\n");
+                    }
+                }
+
                 BuildStructure structure = BuildStructure.parse(content);
 
                 if (structure.getBlocks().isEmpty()) {
@@ -311,8 +324,9 @@ public class AssistantCommand {
                 AssistantMod.LOGGER.info("Imported plan #{} from URL ({} blocks, description: \"{}\")",
                         planId, sortedBlocks.size(), description);
 
-                return "§a[Assistant] Plan imported! ID: " + planId + " (" + description
-                        + " — " + sortedBlocks.size() + " blocks)";
+                resultMsg.append("§a[Assistant] Plan imported! ID: ").append(planId).append(" (").append(description)
+                        .append(" — ").append(sortedBlocks.size()).append(" blocks)");
+                return resultMsg.toString();
 
             } catch (IllegalArgumentException parseError) {
                 AssistantMod.LOGGER.warn("Import parse failed: {}", parseError.getMessage());
@@ -325,7 +339,13 @@ public class AssistantCommand {
             // Send result back on the server thread
             server.execute(() -> {
                 if (!player.isDisconnected()) {
-                    player.sendMessage(Text.literal(message));
+                    if (message.contains("\n")) {
+                        for (String line : message.split("\n")) {
+                            player.sendMessage(Text.literal(line));
+                        }
+                    } else {
+                        player.sendMessage(Text.literal(message));
+                    }
                 }
             });
         });
