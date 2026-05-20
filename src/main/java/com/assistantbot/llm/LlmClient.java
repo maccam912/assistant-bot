@@ -45,7 +45,7 @@ public class LlmClient {
             Output ONLY the VXB-1 text — no markdown fences, no explanation, no commentary.
 
             VXB-1 FORMAT:
-            Line 1 must be "VXB-1".
+            Line 1 must be EXACTLY "VXB-1". No other text should precede it.
             Then: name, origin, size, axes (header fields).
             Then: palette/endpalette section mapping single-char symbols to block IDs.
             Then: build commands (box, set, layer/endlayer).
@@ -55,7 +55,7 @@ public class LlmClient {
             - set x y z S — place one block.
             - layer y Y z Z0 / endlayer — 2D character grid at fixed y=Y, rows starting at z=Z0.
               Rows are ordered by increasing z. Characters in each row are ordered by increasing x.
-              Use "." for air (or the air palette symbol) inside layers.
+              Use "." for air inside layers. Each row must have EXACTLY as many characters as the size X value.
             - layer y Y1-Y2 z Z0 / endlayer — same as above but the grid is duplicated to every
               Y level from Y1 to Y2 (inclusive). Use this for tall repetitive sections like walls,
               pillars, or towers where the same cross-section repeats across many layers.
@@ -70,7 +70,7 @@ public class LlmClient {
             AUTHORING RULES:
             1. Use box for any rectangle or prism larger than 2x2x2.
             2. Use layer for irregular walls, floors with holes, or decorative patterns.
-            3. Never emit coordinates outside the declared size.
+            3. NEVER emit coordinates outside the declared size. Ensure every row in a layer has the correct length.
             4. Use palette symbols consistently — do not invent new symbols after endpalette.
             5. Avoid directional block states unless necessary; when necessary, hide them in the palette.
             6. Prefer bilateral symmetry when possible.

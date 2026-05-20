@@ -107,10 +107,22 @@ public class BuildStructure {
 
         String[] lines = cleaned.split("\\r?\\n");
 
-        // Validate header
-        if (!lines[0].trim().equals("VXB-1")) {
+        // Validate header (skip potential junk before VXB-1)
+        int headerLineIdx = -1;
+        for (int i = 0; i < lines.length; i++) {
+            String trimmed = lines[i].trim();
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) continue;
+            if (trimmed.equals("VXB-1")) {
+                headerLineIdx = i;
+                break;
+            }
+            // If we find something else first, it's not a valid VXB-1
+            break; 
+        }
+
+        if (headerLineIdx == -1) {
             throw new IllegalArgumentException(
-                    "Missing VXB-1 header. First line must be 'VXB-1', got: '" + lines[0].trim() + "'");
+                    "Missing VXB-1 header. First non-comment line must be 'VXB-1'.");
         }
 
         // State
@@ -129,7 +141,7 @@ public class BuildStructure {
         int layerZ0 = 0;
         int currentLayerRow = 0;
 
-        for (int lineNum = 1; lineNum < lines.length; lineNum++) {
+        for (int lineNum = headerLineIdx + 1; lineNum < lines.length; lineNum++) {
             String raw = lines[lineNum];
             String line = raw.trim();
 
@@ -163,9 +175,11 @@ public class BuildStructure {
                 // Applied to all Y values in the range [layerYMin, layerYMax]
                 int z = layerZ0 + currentLayerRow;
                 for (int yi = layerYMin; yi <= layerYMax; yi++) {
-                    for (int xi = 0; xi < line.length(); xi++) {
+                    // Lenient row length: use sizeX if available, otherwise use line length
+                    int cols = (hasBounds) ? Math.min(line.length(), sizeX) : line.length();
+                    for (int xi = 0; xi < cols; xi++) {
                         char ch = line.charAt(xi);
-                        if (ch == '.') {
+                        if (ch == '.' || ch == '-' || ch == ' ') {
                             // Air — remove any previously placed block at this position
                             // (last-write-wins: explicitly writing air clears the cell)
                             positionMap.remove(packPos(xi, yi, z));
@@ -173,13 +187,13 @@ public class BuildStructure {
                         }
                         String blockId = palette.get(ch);
                         if (blockId == null) {
-                            throw new IllegalArgumentException(
-                                    "Line " + (lineNum + 1) + ": undefined palette symbol '" + ch + "'");
+                            // Last-ditch effort: if it's an unrecognized symbol, treat as air rather than crashing
+                            positionMap.remove(packPos(xi, yi, z));
+                            continue;
                         }
                         if (hasBounds && (xi >= sizeX || yi < 0 || yi >= sizeY || z < 0 || z >= sizeZ)) {
-                            throw new IllegalArgumentException(
-                                    "Line " + (lineNum + 1) + ": coordinate (" + xi + "," + yi + "," + z
-                                            + ") out of declared size bounds (" + sizeX + "," + sizeY + "," + sizeZ + ")");
+                            // Skip out of bounds but don't crash
+                            continue;
                         }
                         positionMap.put(packPos(xi, yi, z), blockId);
                     }

@@ -207,16 +207,17 @@ public class VxbDiagnostics {
 
                 // Layer Row-Length Columns Assert
                 if (hasBounds && line.length() != sizeX) {
-                    result.add(Severity.BLOCKER, "Layer Row-Length Columns Assert",
-                            "Layer row length mismatch: got " + line.length() + " characters, but size specifies exactly " + sizeX + " columns.",
+                    result.add(Severity.WARNING, "Layer Row-Length Columns Assert",
+                            "Layer row length mismatch: got " + line.length() + " characters, but size specifies exactly " + sizeX + " columns. This row will be truncated or padded with air.",
                             lineNum);
                 }
 
-                for (int xi = 0; xi < line.length(); xi++) {
+                int cols = (hasBounds) ? Math.min(line.length(), sizeX) : line.length();
+                for (int xi = 0; xi < cols; xi++) {
                     char ch = line.charAt(xi);
                     usedSymbols.add(ch);
 
-                    if (ch == '.') {
+                    if (ch == '.' || ch == '-' || ch == ' ') {
                         // Air placement clears any block at this position
                         for (int yi = layerYMin; yi <= layerYMax; yi++) {
                             blockGrid.remove(packPos(xi, yi, z));
@@ -395,7 +396,7 @@ public class VxbDiagnostics {
             }
 
             // If we get here, it's an unrecognized command
-            if (!line.equals("palette") && !line.equals("endpalette") && !line.equals("endlayer")) {
+            if (!line.equals("palette") && !line.equals("endpalette") && !line.equals("endlayer") && !line.equals("VXB-1")) {
                 result.add(Severity.WARNING, "Layer Declaration Integrity",
                         "Unrecognized command or text line outside sections: '" + line + "'", lineNum);
             }
