@@ -15,9 +15,7 @@ import java.net.http.HttpTimeoutException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -39,7 +37,7 @@ public class LlmClient {
     /** Path to the mounted ConfigMap file containing the model name. */
     private static final String MODEL_FILE_PATH = "/config/openrouter/openrouter-model";
 
-    private static final String SYSTEM_PROMPT = """
+    private static final String SYSTEM_PROMPT_BASE = """
             You are a Minecraft structure generator. Given a description, output a structure in VXB-1 format.
 
             Output ONLY the VXB-1 text — no markdown fences, no explanation, no commentary.
@@ -78,6 +76,7 @@ public class LlmClient {
             8. Keep structures compact on the ground (under 20x20 footprint). Height can be
                 taller — use layer Y ranges to efficiently define repeating floors.
             9. Use short block names without "minecraft:" prefix: "dirt", "oak_planks", "stone", etc.
+                Every palette block base ID MUST appear in the authoritative allowed block list below.
             10. y=0 is ground level. y=up, x=east, z=south.
             11. NEVER use leaf blocks (oak_leaves, birch_leaves, etc.) as decorative elements
                 like bushes, hedges, or shrubs. Leaves decay in normal Minecraft when not
@@ -147,6 +146,10 @@ public class LlmClient {
 
             set 4 1 3 T""";
 
+    private static final String SYSTEM_PROMPT = SYSTEM_PROMPT_BASE
+            + "\n\nALLOWED BLOCK IDS:\n"
+            + BlockIdResolver.buildAllowedBlockListForPrompt();
+
     private final HttpClient httpClient;
     private final Gson gson;
 
@@ -205,14 +208,13 @@ public class LlmClient {
                             + "\nPlease output ONLY the corrected VXB-1 text, ensuring all blocker errors and warnings are resolved. Start with 'VXB-1' on the first line.");
 
             VxbDiagnostics.DiagnosticResult repairResult = VxbDiagnostics.run(repairContent);
-            if (repairResult.hasBlockers()) {
+            if (hasNonMechanicalBlockers(repairResult)) {
                 AssistantMod.LOGGER.error("Repair response also failed with blocker errors:\n{}", repairResult.getLlmReport());
                 throw new IllegalArgumentException("VXB-1 blocker errors persist after repair attempt:\n" + repairResult.getLlmReport());
             }
 
             try {
-                BuildStructure structure2 = BuildStructure.parse(repairContent);
-                structure2.setDiagnostics(repairResult);
+                BuildStructure structure2 = parseAndMechanicallyCorrect(repairContent, repairResult);
                 AssistantMod.LOGGER.info("LLM repair parse succeeded: {} blocks", structure2.getBlocks().size());
                 return structure2;
             } catch (IllegalArgumentException repairParseError) {
@@ -221,8 +223,7 @@ public class LlmClient {
             }
         } else {
             try {
-                BuildStructure structure = BuildStructure.parse(content);
-                structure.setDiagnostics(firstResult);
+                BuildStructure structure = parseAndMechanicallyCorrect(content, firstResult);
                 AssistantMod.LOGGER.info("LLM structure parsed successfully: {} blocks", structure.getBlocks().size());
                 return structure;
             } catch (IllegalArgumentException parseError) {
@@ -230,6 +231,50 @@ public class LlmClient {
                 throw new IllegalArgumentException("VXB-1 parsing failed: " + parseError.getMessage());
             }
         }
+    }
+
+    private BuildStructure parseAndMechanicallyCorrect(String content, VxbDiagnostics.DiagnosticResult diagnostics) {
+        BuildStructure structure = BuildStructure.parse(content);
+        VxbDiagnostics.DiagnosticResult effectiveDiagnostics = withoutMechanicalBlockers(diagnostics);
+        structure.setDiagnostics(effectiveDiagnostics);
+
+        Map<String, String> replacements = BlockIdResolver.mechanicalReplacements(structure.getUniqueBlockIds());
+        for (Map.Entry<String, String> entry : replacements.entrySet()) {
+            AssistantMod.LOGGER.warn("Mechanically replacing invalid block ID by Levenshtein distance: {} -> {}",
+                    entry.getKey(), entry.getValue());
+            structure.replaceBlockId(entry.getKey(), entry.getValue());
+            effectiveDiagnostics.add(VxbDiagnostics.Severity.WARNING, "Mechanical Block ID Correction",
+                    "Replaced invalid block ID '" + entry.getKey() + "' with closest registry ID '"
+                            + entry.getValue() + "'.",
+                    null);
+        }
+
+        if (!replacements.isEmpty()) {
+            AssistantMod.LOGGER.info("Mechanical block ID correction replaced {} invalid IDs", replacements.size());
+        }
+
+        return structure;
+    }
+
+    private static boolean hasNonMechanicalBlockers(VxbDiagnostics.DiagnosticResult result) {
+        for (VxbDiagnostics.Diagnostic diagnostic : result.getBlockers()) {
+            if (!diagnostic.checkName().equals("Invalid Minecraft Block ID")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static VxbDiagnostics.DiagnosticResult withoutMechanicalBlockers(VxbDiagnostics.DiagnosticResult result) {
+        VxbDiagnostics.DiagnosticResult filtered = new VxbDiagnostics.DiagnosticResult();
+        for (VxbDiagnostics.Diagnostic diagnostic : result.getDiagnostics()) {
+            if (diagnostic.severity() == VxbDiagnostics.Severity.BLOCKER
+                    && diagnostic.checkName().equals("Invalid Minecraft Block ID")) {
+                continue;
+            }
+            filtered.add(diagnostic.severity(), diagnostic.checkName(), diagnostic.message(), diagnostic.lineNum());
+        }
+        return filtered;
     }
 
     /**

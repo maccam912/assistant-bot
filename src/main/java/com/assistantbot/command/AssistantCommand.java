@@ -3,6 +3,7 @@ package com.assistantbot.command;
 import com.assistantbot.AssistantManager;
 import com.assistantbot.AssistantMod;
 import com.assistantbot.bot.AssistantBot;
+import com.assistantbot.llm.BlockIdResolver;
 import com.assistantbot.llm.BuildPlan;
 import com.assistantbot.llm.BuildPlanRegistry;
 import com.assistantbot.llm.BuildStructure;
@@ -300,7 +301,7 @@ public class AssistantCommand {
 
                 String content = response.body();
                 var diagResult = com.assistantbot.llm.VxbDiagnostics.run(content);
-                if (diagResult.hasBlockers()) {
+                if (hasNonMechanicalBlockers(diagResult)) {
                     return "§c[Assistant] Import failed — VXB-1 blocker errors:\n" + diagResult.getLlmReport();
                 }
 
@@ -313,6 +314,12 @@ public class AssistantCommand {
                 }
 
                 BuildStructure structure = BuildStructure.parse(content);
+                var replacements = BlockIdResolver.mechanicalReplacements(structure.getUniqueBlockIds());
+                for (var replacement : replacements.entrySet()) {
+                    AssistantMod.LOGGER.warn("Mechanically replacing invalid imported block ID: {} -> {}",
+                            replacement.getKey(), replacement.getValue());
+                    structure.replaceBlockId(replacement.getKey(), replacement.getValue());
+                }
 
                 if (structure.getBlocks().isEmpty()) {
                     return "§c[Assistant] Import failed: parsed structure has no blocks";
@@ -326,6 +333,10 @@ public class AssistantCommand {
 
                 resultMsg.append("§a[Assistant] Plan imported! ID: ").append(planId).append(" (").append(description)
                         .append(" — ").append(sortedBlocks.size()).append(" blocks)");
+                if (!replacements.isEmpty()) {
+                    resultMsg.append("\n§e[Assistant] Corrected ").append(replacements.size())
+                            .append(" invalid block ID(s) by closest Levenshtein match.");
+                }
                 return resultMsg.toString();
 
             } catch (IllegalArgumentException parseError) {
@@ -351,6 +362,15 @@ public class AssistantCommand {
         });
 
         return 1;
+    }
+
+    private static boolean hasNonMechanicalBlockers(com.assistantbot.llm.VxbDiagnostics.DiagnosticResult result) {
+        for (var diagnostic : result.getBlockers()) {
+            if (!diagnostic.checkName().equals("Invalid Minecraft Block ID")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static int status(CommandContext<ServerCommandSource> ctx) {

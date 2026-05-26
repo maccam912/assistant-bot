@@ -4,11 +4,6 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import net.minecraft.registry.Registries;
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
-import net.minecraft.util.Identifier;
-
 /**
  * Multi-phase compiler diagnostic and architectural linting engine for VXB-1.
  * Runs blocker syntax checks and heuristic semantic audits to ensure clean renders
@@ -512,19 +507,10 @@ public class VxbDiagnostics {
         palette.put(symbol, fullBlockId);
 
         // Registry Validation
-        String baseId = stripBlockState(fullBlockId);
-        if (!baseId.equals("minecraft:air")) {
-            Identifier id = Identifier.tryParse(baseId);
-            if (id == null) {
-                result.add(Severity.BLOCKER, "Invalid Minecraft Block ID",
-                        "Block ID '" + baseId + "' is not a syntactically valid Minecraft identifier.", lineNum);
-            } else {
-                Block block = Registries.BLOCK.get(id);
-                if (block == Blocks.AIR) {
-                    result.add(Severity.BLOCKER, "Invalid Minecraft Block ID",
-                            "Block '" + baseId + "' does not exist in the Minecraft 1.21.11 registry.", lineNum);
-                }
-            }
+        String baseId = BlockIdResolver.normalizeBaseId(fullBlockId);
+        if (!BlockIdResolver.isValidBlockId(fullBlockId)) {
+            result.add(Severity.BLOCKER, "Invalid Minecraft Block ID",
+                    "Block '" + baseId + "' does not exist in the Minecraft 1.21.11 block registry.", lineNum);
         }
 
     }
@@ -565,12 +551,6 @@ public class VxbDiagnostics {
         if (name.contains(":")) return name;
         return "minecraft:" + name;
     }
-
-    private static String stripBlockState(String blockId) {
-        int bracketIdx = blockId.indexOf('[');
-        return bracketIdx >= 0 ? blockId.substring(0, bracketIdx) : blockId;
-    }
-
 
     private static String stripCodeFences(String input) {
         String s = input.trim();

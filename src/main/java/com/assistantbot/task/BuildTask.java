@@ -2,6 +2,7 @@ package com.assistantbot.task;
 
 import com.assistantbot.AssistantMod;
 import com.assistantbot.bot.AssistantBot;
+import com.assistantbot.llm.BlockIdResolver;
 import com.assistantbot.llm.BuildPlan;
 import com.assistantbot.llm.BuildPlanRegistry;
 import com.assistantbot.llm.BuildStructure.BlockEntry;
@@ -313,14 +314,19 @@ public class BuildTask implements BotTask {
     }
 
     private boolean placeBlockServerEnforced(ServerWorld world, BlockPos pos, String blockId) {
-        Identifier id = Identifier.tryParse(blockId);
+        Identifier id = Identifier.tryParse(BlockIdResolver.normalizeBaseId(blockId));
         if (id == null) {
             AssistantMod.LOGGER.warn("Invalid block ID: {}", blockId);
             return false;
         }
 
+        if (!Registries.BLOCK.containsId(id)) {
+            AssistantMod.LOGGER.warn("Unknown block ID (LLM hallucination?): {}", blockId);
+            return false;
+        }
+
         Block block = Registries.BLOCK.get(id);
-        if (block == Blocks.AIR) {
+        if (block == Blocks.AIR && !id.toString().equals("minecraft:air")) {
             AssistantMod.LOGGER.warn("Unknown block ID (LLM hallucination?): {}", blockId);
             return false;
         }
