@@ -3,6 +3,9 @@ package com.assistantbot.command;
 import com.assistantbot.AssistantManager;
 import com.assistantbot.AssistantMod;
 import com.assistantbot.bot.AssistantBot;
+import com.assistantbot.gui.BotActions;
+import com.assistantbot.gui.BotMenu;
+import com.assistantbot.gui.BotRemoteItem;
 import com.assistantbot.llm.BlockIdResolver;
 import com.assistantbot.llm.BuildPlan;
 import com.assistantbot.llm.BuildPlanRegistry;
@@ -85,6 +88,10 @@ public class AssistantCommand {
                             .executes(AssistantCommand::importPlan))))
                 .then(CommandManager.literal("status")
                     .executes(AssistantCommand::status))
+                .then(CommandManager.literal("menu")
+                    .executes(AssistantCommand::menu))
+                .then(CommandManager.literal("remote")
+                    .executes(AssistantCommand::remote))
         );
     }
 
@@ -92,8 +99,7 @@ public class AssistantCommand {
         ServerPlayerEntity player = ctx.getSource().getPlayer();
         if (player == null) return 0;
 
-        AssistantManager.getInstance().summon(player);
-        ctx.getSource().sendFeedback(() -> Text.literal("§a[Assistant] Bot summoned!"), false);
+        BotActions.summon(player);
         return 1;
     }
 
@@ -101,31 +107,40 @@ public class AssistantCommand {
         ServerPlayerEntity player = ctx.getSource().getPlayer();
         if (player == null) return 0;
 
-        if (!AssistantManager.getInstance().hasBot(player.getUuid())) {
-            ctx.getSource().sendFeedback(() -> Text.literal("§c[Assistant] No bot to dismiss."), false);
-            return 0;
-        }
-
-        AssistantManager.getInstance().remove(player.getUuid());
-        ctx.getSource().sendFeedback(() -> Text.literal("§a[Assistant] Bot dismissed."), false);
+        BotActions.dismiss(player);
         return 1;
     }
 
     private static int follow(CommandContext<ServerCommandSource> ctx) {
-        AssistantBot bot = requireBot(ctx);
-        if (bot == null) return 0;
+        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        if (player == null) return 0;
 
-        bot.setTask(new FollowTask());
-        ctx.getSource().sendFeedback(() -> Text.literal("§a[Assistant] Following you!"), false);
+        BotActions.follow(player);
         return 1;
     }
 
     private static int stop(CommandContext<ServerCommandSource> ctx) {
-        AssistantBot bot = requireBot(ctx);
-        if (bot == null) return 0;
+        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        if (player == null) return 0;
 
-        bot.setTask(new IdleTask());
-        ctx.getSource().sendFeedback(() -> Text.literal("§a[Assistant] Stopping."), false);
+        BotActions.stop(player);
+        return 1;
+    }
+
+    private static int menu(CommandContext<ServerCommandSource> ctx) {
+        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        if (player == null) return 0;
+
+        BotMenu.open(player);
+        return 1;
+    }
+
+    private static int remote(CommandContext<ServerCommandSource> ctx) {
+        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        if (player == null) return 0;
+
+        BotRemoteItem.giveTo(player);
+        ctx.getSource().sendFeedback(() -> Text.literal("§a[Assistant] Bot Remote added to your inventory."), false);
         return 1;
     }
 
@@ -374,14 +389,10 @@ public class AssistantCommand {
     }
 
     private static int status(CommandContext<ServerCommandSource> ctx) {
-        AssistantBot bot = requireBot(ctx);
-        if (bot == null) return 0;
+        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        if (player == null) return 0;
 
-        String status = bot.getStatusString();
-        BlockPos pos = bot.getBlockPos();
-        ctx.getSource().sendFeedback(
-                () -> Text.literal("§b[Assistant] Status: " + status + " | Pos: " + pos.toShortString()),
-                false);
+        BotActions.status(player);
         return 1;
     }
 

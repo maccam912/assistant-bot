@@ -41,6 +41,16 @@ Output jar: `build/libs/assistant-bot-<version>.jar`
 | `/assistant build <description>` | Plan + auto-execute (convenience shortcut) |
 | `/assistant import <url> <description>` | Import a VXB-1 plan from a URL |
 | `/assistant status` | Show current task and position |
+| `/assistant menu` | Open the click-to-control bot menu (chest GUI) |
+| `/assistant remote` | Get a "Bot Remote" item — right-click it to open the menu |
+
+## GUI (server-side, no client mod)
+
+A point-and-click menu (`com.assistantbot.gui`) for non-CLI users. A vanilla compass
+marked via `custom_data` ("Bot Remote") opens a `GenericContainerScreenHandler` menu on
+right-click (`UseItemCallback`); clicks are caught in `onSlotClick` and dispatched to
+`BotActions` (shared with the commands). Build text is captured through an
+`AnvilScreenHandler` rename box. The remote is auto-given on `summon`.
 
 ## Design Decisions
 
