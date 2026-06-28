@@ -35,7 +35,11 @@ public class AssistantMod implements ModInitializer {
                     && player instanceof ServerPlayerEntity serverPlayer
                     && BotRemoteItem.isRemote(player.getStackInHand(hand))) {
                 BotMenu.open(serverPlayer);
-                return ActionResult.SUCCESS;
+                // Server-authoritative: opening the screen happens only on the
+                // logical server. Returning plain SUCCESS would make the client
+                // also predict the use, desyncing the player (drift / "underwater"
+                // movement). SUCCESS_SERVER keeps the action server-side only.
+                return ActionResult.SUCCESS_SERVER;
             }
             return ActionResult.PASS;
         });
