@@ -14,8 +14,11 @@ import com.assistantbot.task.*;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.command.argument.BlockPosArgumentType;
+import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -32,26 +35,51 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Brigadier command tree for /assistant.
  *
- * Commands:
- *   /assistant summon              — spawn your personal bot
- *   /assistant dismiss             — remove your bot
- *   /assistant follow | come       — bot follows you
- *   /assistant stop                — bot goes idle
- *   /assistant mine <pos>          — mine block at position
- *   /assistant place <block> <pos> — place block
- *   /assistant deposit             — deposit inventory into nearest container
- *   /assistant plan <description>  — generate a build plan (LLM), returns plan ID
- *   /assistant execute <id>        — execute a stored plan at bot's current position
- *   /assistant plans               — list all available build plans
- *   /assistant import <url> <desc> — import a VXB-1 plan from a URL
- *   /assistant build <description> — plan + auto-execute (convenience)
- *   /assistant status              — show current task and position
+ * Every subcommand may be prefixed with an optional online player name so the
+ * command can be issued on someone else's behalf (e.g. from rcon/console, or to
+ * help a player who has trouble typing). When the name is omitted, the command
+ * acts as the executing player.
+ *
+ *   /assistant summon                   — spawn your personal bot
+ *   /assistant <player> summon          — spawn <player>'s bot, for them
+ *   /assistant <player> follow | come   — <player>'s bot follows <player>
+ *   /assistant <player> build <desc>    — plan + auto-execute for <player>
+ *   ... and so on for every subcommand below.
+ *
+ * Subcommands:
+ *   summon                  — spawn the bot
+ *   dismiss                 — remove the bot
+ *   follow | come           — bot follows the target player
+ *   stop                    — bot goes idle
+ *   mine <pos>              — mine block at position
+ *   place <block> <pos>    — place block
+ *   deposit                 — deposit inventory into nearest container
+ *   plan <description>      — generate a build plan (LLM), returns plan ID
+ *   execute <id>           — execute a stored plan at bot's current position
+ *   plans                   — list all available build plans
+ *   import <url> <desc>    — import a VXB-1 plan from a URL
+ *   build <description>    — plan + auto-execute (convenience)
+ *   status                  — show current task and position
  */
 public class AssistantCommand {
 
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
+        // The subcommand tree is attached twice: once directly under /assistant
+        // (acts as the executing player) and once behind an optional leading
+        // player-name argument (acts on that player's behalf).
         dispatcher.register(
-            CommandManager.literal("assistant")
+            subcommands(CommandManager.literal("assistant"))
+                .then(subcommands(CommandManager.argument("player", EntityArgumentType.player())))
+        );
+    }
+
+    /**
+     * Attaches every /assistant subcommand to the given builder and returns it,
+     * so the same tree can hang off both the root literal and the optional
+     * {@code <player>} argument node.
+     */
+    private static <T extends ArgumentBuilder<ServerCommandSource, T>> T subcommands(T parent) {
+        return parent
                 .then(CommandManager.literal("summon")
                     .executes(AssistantCommand::summon))
                 .then(CommandManager.literal("dismiss")
@@ -91,12 +119,36 @@ public class AssistantCommand {
                 .then(CommandManager.literal("menu")
                     .executes(AssistantCommand::menu))
                 .then(CommandManager.literal("remote")
-                    .executes(AssistantCommand::remote))
-        );
+                    .executes(AssistantCommand::remote));
+    }
+
+    /**
+     * Resolves the player a command should act on. If a {@code <player>} name was
+     * given it must match a single online player; otherwise the command acts as
+     * the executing player. Returns {@code null} (after sending an error) when the
+     * named player can't be found, or when no name was given and there is no
+     * executing player (e.g. run from rcon/console).
+     */
+    private static ServerPlayerEntity resolveTarget(CommandContext<ServerCommandSource> ctx) {
+        try {
+            return EntityArgumentType.getPlayer(ctx, "player");
+        } catch (IllegalArgumentException noNameGiven) {
+            // No <player> argument on this path — act as the executor.
+            ServerPlayerEntity self = ctx.getSource().getPlayer();
+            if (self == null) {
+                ctx.getSource().sendError(Text.literal(
+                        "[Assistant] No player context. From console/rcon, name a player: "
+                        + "/assistant <player> <command>"));
+            }
+            return self;
+        } catch (CommandSyntaxException notFound) {
+            ctx.getSource().sendError(Text.literal("[Assistant] " + notFound.getMessage()));
+            return null;
+        }
     }
 
     private static int summon(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        ServerPlayerEntity player = resolveTarget(ctx);
         if (player == null) return 0;
 
         BotActions.summon(player);
@@ -104,7 +156,7 @@ public class AssistantCommand {
     }
 
     private static int dismiss(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        ServerPlayerEntity player = resolveTarget(ctx);
         if (player == null) return 0;
 
         BotActions.dismiss(player);
@@ -112,7 +164,7 @@ public class AssistantCommand {
     }
 
     private static int follow(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        ServerPlayerEntity player = resolveTarget(ctx);
         if (player == null) return 0;
 
         BotActions.follow(player);
@@ -120,7 +172,7 @@ public class AssistantCommand {
     }
 
     private static int stop(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        ServerPlayerEntity player = resolveTarget(ctx);
         if (player == null) return 0;
 
         BotActions.stop(player);
@@ -128,7 +180,7 @@ public class AssistantCommand {
     }
 
     private static int menu(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        ServerPlayerEntity player = resolveTarget(ctx);
         if (player == null) return 0;
 
         BotMenu.open(player);
@@ -136,7 +188,7 @@ public class AssistantCommand {
     }
 
     private static int remote(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        ServerPlayerEntity player = resolveTarget(ctx);
         if (player == null) return 0;
 
         BotRemoteItem.giveTo(player);
@@ -188,7 +240,7 @@ public class AssistantCommand {
         AssistantBot bot = requireBot(ctx);
         if (bot == null) return 0;
 
-        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        ServerPlayerEntity player = resolveTarget(ctx);
         if (player == null) return 0;
 
         String description = StringArgumentType.getString(ctx, "description");
@@ -206,7 +258,7 @@ public class AssistantCommand {
         AssistantBot bot = requireBot(ctx);
         if (bot == null) return 0;
 
-        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        ServerPlayerEntity player = resolveTarget(ctx);
         if (player == null) return 0;
 
         String description = StringArgumentType.getString(ctx, "description");
@@ -265,7 +317,7 @@ public class AssistantCommand {
     }
 
     private static int importPlan(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        ServerPlayerEntity player = resolveTarget(ctx);
         if (player == null) return 0;
 
         String url = StringArgumentType.getString(ctx, "url");
@@ -389,7 +441,7 @@ public class AssistantCommand {
     }
 
     private static int status(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        ServerPlayerEntity player = resolveTarget(ctx);
         if (player == null) return 0;
 
         BotActions.status(player);
@@ -397,7 +449,7 @@ public class AssistantCommand {
     }
 
     private static AssistantBot requireBot(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = ctx.getSource().getPlayer();
+        ServerPlayerEntity player = resolveTarget(ctx);
         if (player == null) return null;
 
         AssistantBot bot = AssistantManager.getInstance().getBot(player.getUuid());
