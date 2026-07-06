@@ -20,6 +20,16 @@ public class BotClientConnection extends Connection {
 
     public BotClientConnection() {
         super(PacketFlow.SERVERBOUND);
+        // Registering this Connection as the handler of an EmbeddedChannel fires
+        // channelActive, which assigns Connection's private channel field. Without
+        // a channel, isConnecting() stays true and mods that gate player-data setup
+        // on it (e.g. Open Parties and Claims) skip this player, then crash the
+        // server ticking a player they never initialized.
+        new EmbeddedChannel(this);
+    }
+
+    @Override
+    public void setReadOnly() {
     }
 
     @Override
