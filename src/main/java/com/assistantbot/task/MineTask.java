@@ -5,9 +5,9 @@ import com.assistantbot.util.BlockHelper;
 import com.assistantbot.util.InventoryHelper;
 import com.assistantbot.util.LookHelper;
 import com.assistantbot.util.NavigationHelper;
-import net.minecraft.block.BlockState;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Mine a single block at a target position. Phases:
@@ -48,7 +48,7 @@ public class MineTask implements BotTask {
     }
 
     private TickResult tickApproaching(AssistantBot bot) {
-        Vec3d targetCenter = Vec3d.ofCenter(targetPos);
+        Vec3 targetCenter = Vec3.atCenterOf(targetPos);
         double distance = bot.getPos().distanceTo(targetCenter);
 
         if (distance <= BlockHelper.REACH_DISTANCE) {
@@ -67,7 +67,7 @@ public class MineTask implements BotTask {
         BlockState targetState = bot.getWorld().getBlockState(targetPos);
         InventoryHelper.equipBestTool(bot.getFakePlayer(), targetState);
 
-        float hardness = targetState.getHardness(bot.getWorld(), targetPos);
+        float hardness = targetState.getDestroySpeed(bot.getWorld(), targetPos);
         breakingTicksRequired = BlockHelper.calculateBreakTicks(bot.getFakePlayer(), targetState, hardness);
         breakingTicks = 0;
         phase = MinePhase.BREAKING;
@@ -81,7 +81,7 @@ public class MineTask implements BotTask {
             return TickResult.COMPLETE;
         }
 
-        LookHelper.lookAt(bot.getFakePlayer(), Vec3d.ofCenter(targetPos));
+        LookHelper.lookAt(bot.getFakePlayer(), Vec3.atCenterOf(targetPos));
         breakingTicks += 5; // we tick every 5 game ticks
 
         if (breakingTicks >= breakingTicksRequired) {

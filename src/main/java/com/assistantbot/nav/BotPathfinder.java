@@ -2,15 +2,15 @@ package com.assistantbot.nav;
 
 import com.assistantbot.AssistantMod;
 import com.assistantbot.bot.AssistantBot;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.registry.tag.BlockTags;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Custom A* pathfinder for the assistant bot, inspired by mineflayer-pathfinder
@@ -52,7 +52,7 @@ public class BotPathfinder {
     private final AssistantBot bot;
 
     // Current path state
-    private @Nullable List<Vec3d> currentWaypoints;
+    private @Nullable List<Vec3> currentWaypoints;
     private int currentWaypointIndex;
     private @Nullable BlockPos currentTarget;
     private int ticksSinceLastCompute;
@@ -65,12 +65,12 @@ public class BotPathfinder {
 
     /**
      * Compute a path from the bot's current position to the target using A*.
-     * Returns a list of waypoint Vec3d positions (block-centered on XZ,
+     * Returns a list of waypoint Vec3 positions (block-centered on XZ,
      * feet-level Y), or null if no path found.
      */
-    public @Nullable List<Vec3d> computePath(BlockPos target) {
+    public @Nullable List<Vec3> computePath(BlockPos target) {
         BlockPos start = bot.getBlockPos();
-        ServerWorld world = bot.getWorld();
+        ServerLevel world = bot.getWorld();
 
         if (start.equals(target)) return null;
 
@@ -106,8 +106,8 @@ public class BotPathfinder {
             AStarNode current = openSet.poll();
 
             // Goal check: within 1 block of target (same as the old PATH_TARGET_DISTANCE=1)
-            if (current.pos.isWithinDistance(target, 1.5)) {
-                List<Vec3d> path = reconstructPath(cameFrom, current.pos);
+            if (current.pos.closerThan(target, 1.5)) {
+                List<Vec3> path = reconstructPath(cameFrom, current.pos);
                 AssistantMod.LOGGER.info("A* path found! length={}, iterations={}", path.size(), iterations);
                 return path;
             }
@@ -141,11 +141,11 @@ public class BotPathfinder {
     }
 
     /** Reconstruct path from cameFrom map. */
-    private List<Vec3d> reconstructPath(Map<BlockPos, BlockPos> cameFrom, BlockPos current) {
-        List<Vec3d> path = new ArrayList<>();
+    private List<Vec3> reconstructPath(Map<BlockPos, BlockPos> cameFrom, BlockPos current) {
+        List<Vec3> path = new ArrayList<>();
         while (current != null) {
             // Block-centered XZ, feet-level Y
-            path.add(new Vec3d(current.getX() + 0.5, current.getY(), current.getZ() + 0.5));
+            path.add(new Vec3(current.getX() + 0.5, current.getY(), current.getZ() + 0.5));
             current = cameFrom.get(current);
         }
         Collections.reverse(path);
@@ -159,7 +159,7 @@ public class BotPathfinder {
      * Generate all reachable neighbors from a position.
      * Considers: forward, diagonal, jump up, drop down, climb.
      */
-    private List<Neighbor> getNeighbors(ServerWorld world, BlockPos pos) {
+    private List<Neighbor> getNeighbors(ServerLevel world, BlockPos pos) {
         List<Neighbor> neighbors = new ArrayList<>();
 
         // Cardinal directions: N, S, E, W
@@ -192,10 +192,10 @@ public class BotPathfinder {
      *    +C    (feet level: must be passable)
      *    #D    (ground: must be solid)
      */
-    private void getMoveForward(ServerWorld world, BlockPos pos, int dx, int dz, List<Neighbor> neighbors) {
-        BlockPos dest = pos.add(dx, 0, dz);
-        BlockPos destHead = dest.up();
-        BlockPos destGround = dest.down();
+    private void getMoveForward(ServerLevel world, BlockPos pos, int dx, int dz, List<Neighbor> neighbors) {
+        BlockPos dest = pos.offset(dx, 0, dz);
+        BlockPos destHead = dest.above();
+        BlockPos destGround = dest.below();
 
         if (isPassable(world, dest) && isPassable(world, destHead) && isSolid(world, destGround)) {
             double cost = COST_FORWARD;
@@ -214,11 +214,11 @@ public class BotPathfinder {
      *   .+C    (dest feet: must be solid or passable-with-ground)
      *   #D     (current ground + dest ground)
      */
-    private void getMoveJumpUp(ServerWorld world, BlockPos pos, int dx, int dz, List<Neighbor> neighbors) {
-        BlockPos dest = pos.add(dx, 1, dz);
-        BlockPos destHead = dest.up();
-        BlockPos destGround = dest.down(); // same as pos.add(dx, 0, dz)
-        BlockPos aboveCurrent = pos.up(2); // need clearance to jump
+    private void getMoveJumpUp(ServerLevel world, BlockPos pos, int dx, int dz, List<Neighbor> neighbors) {
+        BlockPos dest = pos.offset(dx, 1, dz);
+        BlockPos destHead = dest.above();
+        BlockPos destGround = dest.below(); // same as pos.add(dx, 0, dz)
+        BlockPos aboveCurrent = pos.above(2); // need clearance to jump
 
         // Need: clearance above current pos, passable at dest feet & head, solid ground under dest
         if (isPassable(world, aboveCurrent)
@@ -232,19 +232,19 @@ public class BotPathfinder {
      * Drop down move: walk off edge and fall 1-3 blocks in a cardinal direction.
      * The horizontal neighbor must be air (no ground), and we find the landing spot.
      */
-    private void getMoveDropDown(ServerWorld world, BlockPos pos, int dx, int dz, List<Neighbor> neighbors) {
-        BlockPos horizontal = pos.add(dx, 0, dz);
-        BlockPos horizontalHead = horizontal.up();
+    private void getMoveDropDown(ServerLevel world, BlockPos pos, int dx, int dz, List<Neighbor> neighbors) {
+        BlockPos horizontal = pos.offset(dx, 0, dz);
+        BlockPos horizontalHead = horizontal.above();
 
         // The horizontal position feet & head must be passable (we walk through)
         if (!isPassable(world, horizontal) || !isPassable(world, horizontalHead)) return;
 
         // Find landing: scan downward from horizontal position
         for (int drop = 1; drop <= MAX_DROP_DOWN; drop++) {
-            BlockPos landing = horizontal.down(drop);
-            BlockPos landingGround = landing.down();
+            BlockPos landing = horizontal.below(drop);
+            BlockPos landingGround = landing.below();
 
-            if (isSolid(world, landingGround) && isPassable(world, landing) && isPassable(world, landing.up())) {
+            if (isSolid(world, landingGround) && isPassable(world, landing) && isPassable(world, landing.above())) {
                 double cost = COST_DROP + (drop - 1) * 0.5; // more drop = more cost
                 neighbors.add(new Neighbor(landing, cost));
                 break; // found landing, stop scanning
@@ -260,18 +260,18 @@ public class BotPathfinder {
      * Both cardinal intermediate positions must have passable head space
      * (to avoid clipping corners).
      */
-    private void getMoveDiagonal(ServerWorld world, BlockPos pos, int dx, int dz, List<Neighbor> neighbors) {
-        BlockPos dest = pos.add(dx, 0, dz);
-        BlockPos destHead = dest.up();
-        BlockPos destGround = dest.down();
+    private void getMoveDiagonal(ServerLevel world, BlockPos pos, int dx, int dz, List<Neighbor> neighbors) {
+        BlockPos dest = pos.offset(dx, 0, dz);
+        BlockPos destHead = dest.above();
+        BlockPos destGround = dest.below();
 
         if (!isPassable(world, dest) || !isPassable(world, destHead) || !isSolid(world, destGround)) return;
 
         // Check both cardinal intermediate positions for passability (corner check)
-        BlockPos side1 = pos.add(dx, 0, 0);
-        BlockPos side2 = pos.add(0, 0, dz);
-        boolean side1Passable = isPassable(world, side1) && isPassable(world, side1.up());
-        boolean side2Passable = isPassable(world, side2) && isPassable(world, side2.up());
+        BlockPos side1 = pos.offset(dx, 0, 0);
+        BlockPos side2 = pos.offset(0, 0, dz);
+        boolean side1Passable = isPassable(world, side1) && isPassable(world, side1.above());
+        boolean side2Passable = isPassable(world, side2) && isPassable(world, side2.above());
 
         // Need at least one side passable (like mineflayer: can hug wall)
         if (!side1Passable && !side2Passable) return;
@@ -287,11 +287,11 @@ public class BotPathfinder {
      * Climb up: if current position has a climbable block (ladder/vine),
      * move 1 block up.
      */
-    private void getMoveClimbUp(ServerWorld world, BlockPos pos, List<Neighbor> neighbors) {
-        if (!isClimbable(world, pos) && !isClimbable(world, pos.up())) return;
+    private void getMoveClimbUp(ServerLevel world, BlockPos pos, List<Neighbor> neighbors) {
+        if (!isClimbable(world, pos) && !isClimbable(world, pos.above())) return;
 
-        BlockPos dest = pos.up();
-        BlockPos destHead = dest.up();
+        BlockPos dest = pos.above();
+        BlockPos destHead = dest.above();
 
         if (isPassable(world, destHead) || isClimbable(world, destHead)) {
             neighbors.add(new Neighbor(dest, COST_LADDER));
@@ -301,8 +301,8 @@ public class BotPathfinder {
     /**
      * Climb down: if position below has a climbable block, move 1 block down.
      */
-    private void getMoveClimbDown(ServerWorld world, BlockPos pos, List<Neighbor> neighbors) {
-        BlockPos dest = pos.down();
+    private void getMoveClimbDown(ServerLevel world, BlockPos pos, List<Neighbor> neighbors) {
+        BlockPos dest = pos.below();
         if (isClimbable(world, dest) || isClimbable(world, pos)) {
             if (isPassable(world, dest) || isClimbable(world, dest)) {
                 neighbors.add(new Neighbor(dest, COST_LADDER));
@@ -313,32 +313,31 @@ public class BotPathfinder {
     // ==================== Block Queries ====================
 
     /** A block the player can walk/stand through (air, water, grass, flowers, etc.) */
-    private boolean isPassable(ServerWorld world, BlockPos pos) {
+    private boolean isPassable(ServerLevel world, BlockPos pos) {
         BlockState state = world.getBlockState(pos);
         // Air, cave air, void air
         if (state.isAir()) return true;
-        // Non-solid blocks that players can walk through
-        if (!state.blocksMovement()) return true;
-        return false;
+        // Non-colliding blocks that players can walk through.
+        return state.getCollisionShape(world, pos).isEmpty();
     }
 
     /** A block the player can stand on (solid, full-block collision). */
-    private boolean isSolid(ServerWorld world, BlockPos pos) {
+    private boolean isSolid(ServerLevel world, BlockPos pos) {
         BlockState state = world.getBlockState(pos);
         if (state.isAir()) return false;
         // Use the collision shape: if it blocks movement, it's solid enough to stand on
-        return state.blocksMovement();
+        return !state.getCollisionShape(world, pos).isEmpty();
     }
 
     /** Check if a block is water. */
-    private boolean isWater(ServerWorld world, BlockPos pos) {
-        return world.getBlockState(pos).isOf(Blocks.WATER);
+    private boolean isWater(ServerLevel world, BlockPos pos) {
+        return world.getBlockState(pos).is(Blocks.WATER);
     }
 
     /** Check if a block is climbable (ladder, vine, etc.) */
-    private boolean isClimbable(ServerWorld world, BlockPos pos) {
+    private boolean isClimbable(ServerLevel world, BlockPos pos) {
         BlockState state = world.getBlockState(pos);
-        return state.isIn(BlockTags.CLIMBABLE);
+        return state.is(BlockTags.CLIMBABLE);
     }
 
     // ==================== Waypoint Iteration ====================
@@ -350,7 +349,7 @@ public class BotPathfinder {
      *
      * @return the next waypoint to walk toward, or null if already at target / no path
      */
-    public @Nullable Vec3d getNextWaypoint(BlockPos target) {
+    public @Nullable Vec3 getNextWaypoint(BlockPos target) {
         ticksSinceLastCompute += TASK_TICK_INTERVAL;
 
         boolean needsRecompute = false;
@@ -382,9 +381,9 @@ public class BotPathfinder {
         }
 
         // Advance past waypoints we've already reached
-        Vec3d botPos = bot.getPos();
+        Vec3 botPos = bot.getPos();
         while (currentWaypointIndex < currentWaypoints.size()) {
-            Vec3d waypoint = currentWaypoints.get(currentWaypointIndex);
+            Vec3 waypoint = currentWaypoints.get(currentWaypointIndex);
             double horizontalDist = Math.sqrt(
                     Math.pow(botPos.x - waypoint.x, 2) +
                     Math.pow(botPos.z - waypoint.z, 2)

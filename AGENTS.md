@@ -1,6 +1,6 @@
 # Assistant Bot — Fabric Minecraft Mod
 
-A server-side Fabric mod that provides a personal assistant bot using FakePlayer.
+A server-side Fabric mod that provides a personal assistant bot using a visible server-side player.
 The bot is driven by a tick-based state machine and supports task interrupts
 (e.g., combat automatically saves/restores the previous task).
 
@@ -8,7 +8,7 @@ The bot is driven by a tick-based state machine and supports task interrupts
 
 - **AssistantMod** — Entry point. Registers commands, tick handler, shutdown cleanup.
 - **AssistantManager** — Singleton managing one bot per player (owner UUID → AssistantBot).
-- **AssistantBot** — Core bot wrapping `FakePlayer`. Owns the state machine: ticks the
+- **AssistantBot** — Core bot wrapping `BotPlayer`. Owns the state machine: ticks the
   current `BotTask`, detects combat interrupts via health-drop, saves/restores tasks.
 - **BotTask** interface — Each task is a mini state machine with `tick()`, `onStart()`,
   `onStop()`, `getStatusString()`. Returns `TickResult` (CONTINUE / COMPLETE / FAILED).
@@ -47,10 +47,10 @@ Output jar: `build/libs/assistant-bot-<version>.jar`
 ## GUI (server-side, no client mod)
 
 A point-and-click menu (`com.assistantbot.gui`) for non-CLI users. A vanilla compass
-marked via `custom_data` ("Bot Remote") opens a `GenericContainerScreenHandler` menu on
-right-click (`UseItemCallback`); clicks are caught in `onSlotClick` and dispatched to
+marked via `custom_data` ("Bot Remote") opens a `ChestMenu` on
+right-click (`UseItemCallback`); clicks are caught in `clicked` and dispatched to
 `BotActions` (shared with the commands). Build text is captured through an
-`AnvilScreenHandler` rename box. The remote is auto-given on `summon`.
+`AnvilMenu` rename box. The remote is auto-given on `summon`.
 
 ## Design Decisions
 
@@ -60,15 +60,16 @@ right-click (`UseItemCallback`); clicks are caught in `onSlotClick` and dispatch
   No task queue needed.
 - **Server-side only** — All logic runs on the logical server. Works in singleplayer
   (which has an embedded server) and dedicated servers.
-- **FakePlayer as actor** — Fabric API's FakePlayer provides a server-side
-  ServerPlayerEntity we can drive programmatically. The "brain" is our task system.
+- **ServerPlayer-style actor** — `BotPlayer` extends Minecraft's `ServerPlayer`
+  so it can be driven programmatically while still appearing to nearby clients.
+  The "brain" is our task system.
 
 ## Tech Stack
 
-- Minecraft 1.21.11
-- Fabric Loader ≥0.18
-- Fabric API (FakePlayer, commands, events)
-- Java 21
+- Minecraft 26.2
+- Fabric Loader ≥0.19.3
+- Fabric API (commands, lifecycle/player events)
+- Java 25
 
 ## Inspiration
 

@@ -17,20 +17,19 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import net.minecraft.command.argument.BlockPosArgumentType;
-import net.minecraft.command.argument.EntityArgumentType;
-import net.minecraft.server.command.CommandManager;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 
 /**
  * Brigadier command tree for /assistant.
@@ -63,13 +62,13 @@ import java.util.concurrent.CompletableFuture;
  */
 public class AssistantCommand {
 
-    public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         // The subcommand tree is attached twice: once directly under /assistant
         // (acts as the executing player) and once behind an optional leading
         // player-name argument (acts on that player's behalf).
         dispatcher.register(
-            subcommands(CommandManager.literal("assistant"))
-                .then(subcommands(CommandManager.argument("player", EntityArgumentType.player())))
+            subcommands(Commands.literal("assistant"))
+                .then(subcommands(Commands.argument("player", EntityArgument.player())))
         );
     }
 
@@ -78,47 +77,47 @@ public class AssistantCommand {
      * so the same tree can hang off both the root literal and the optional
      * {@code <player>} argument node.
      */
-    private static <T extends ArgumentBuilder<ServerCommandSource, T>> T subcommands(T parent) {
+    private static <T extends ArgumentBuilder<CommandSourceStack, T>> T subcommands(T parent) {
         return parent
-                .then(CommandManager.literal("summon")
+                .then(Commands.literal("summon")
                     .executes(AssistantCommand::summon))
-                .then(CommandManager.literal("dismiss")
+                .then(Commands.literal("dismiss")
                     .executes(AssistantCommand::dismiss))
-                .then(CommandManager.literal("follow")
+                .then(Commands.literal("follow")
                     .executes(AssistantCommand::follow))
-                .then(CommandManager.literal("come")
+                .then(Commands.literal("come")
                     .executes(AssistantCommand::follow))
-                .then(CommandManager.literal("stop")
+                .then(Commands.literal("stop")
                     .executes(AssistantCommand::stop))
-                .then(CommandManager.literal("mine")
-                    .then(CommandManager.argument("pos", BlockPosArgumentType.blockPos())
+                .then(Commands.literal("mine")
+                    .then(Commands.argument("pos", BlockPosArgument.blockPos())
                         .executes(AssistantCommand::mine)))
-                .then(CommandManager.literal("place")
-                    .then(CommandManager.argument("block", StringArgumentType.word())
-                        .then(CommandManager.argument("pos", BlockPosArgumentType.blockPos())
+                .then(Commands.literal("place")
+                    .then(Commands.argument("block", StringArgumentType.word())
+                        .then(Commands.argument("pos", BlockPosArgument.blockPos())
                             .executes(AssistantCommand::place))))
-                .then(CommandManager.literal("deposit")
+                .then(Commands.literal("deposit")
                     .executes(AssistantCommand::deposit))
-                .then(CommandManager.literal("build")
-                    .then(CommandManager.argument("description", StringArgumentType.greedyString())
+                .then(Commands.literal("build")
+                    .then(Commands.argument("description", StringArgumentType.greedyString())
                         .executes(AssistantCommand::build)))
-                .then(CommandManager.literal("plan")
-                    .then(CommandManager.argument("description", StringArgumentType.greedyString())
+                .then(Commands.literal("plan")
+                    .then(Commands.argument("description", StringArgumentType.greedyString())
                         .executes(AssistantCommand::plan)))
-                .then(CommandManager.literal("execute")
-                    .then(CommandManager.argument("id", IntegerArgumentType.integer(1))
+                .then(Commands.literal("execute")
+                    .then(Commands.argument("id", IntegerArgumentType.integer(1))
                         .executes(AssistantCommand::execute)))
-                .then(CommandManager.literal("plans")
+                .then(Commands.literal("plans")
                     .executes(AssistantCommand::listPlans))
-                .then(CommandManager.literal("import")
-                    .then(CommandManager.argument("url", StringArgumentType.string())
-                        .then(CommandManager.argument("description", StringArgumentType.greedyString())
+                .then(Commands.literal("import")
+                    .then(Commands.argument("url", StringArgumentType.string())
+                        .then(Commands.argument("description", StringArgumentType.greedyString())
                             .executes(AssistantCommand::importPlan))))
-                .then(CommandManager.literal("status")
+                .then(Commands.literal("status")
                     .executes(AssistantCommand::status))
-                .then(CommandManager.literal("menu")
+                .then(Commands.literal("menu")
                     .executes(AssistantCommand::menu))
-                .then(CommandManager.literal("remote")
+                .then(Commands.literal("remote")
                     .executes(AssistantCommand::remote));
     }
 
@@ -129,90 +128,90 @@ public class AssistantCommand {
      * named player can't be found, or when no name was given and there is no
      * executing player (e.g. run from rcon/console).
      */
-    private static ServerPlayerEntity resolveTarget(CommandContext<ServerCommandSource> ctx) {
+    private static ServerPlayer resolveTarget(CommandContext<CommandSourceStack> ctx) {
         try {
-            return EntityArgumentType.getPlayer(ctx, "player");
+            return EntityArgument.getPlayer(ctx, "player");
         } catch (IllegalArgumentException noNameGiven) {
             // No <player> argument on this path — act as the executor.
-            ServerPlayerEntity self = ctx.getSource().getPlayer();
+            ServerPlayer self = ctx.getSource().getPlayer();
             if (self == null) {
-                ctx.getSource().sendError(Text.literal(
+                ctx.getSource().sendFailure(Component.literal(
                         "[Assistant] No player context. From console/rcon, name a player: "
                         + "/assistant <player> <command>"));
             }
             return self;
         } catch (CommandSyntaxException notFound) {
-            ctx.getSource().sendError(Text.literal("[Assistant] " + notFound.getMessage()));
+            ctx.getSource().sendFailure(Component.literal("[Assistant] " + notFound.getMessage()));
             return null;
         }
     }
 
-    private static int summon(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = resolveTarget(ctx);
+    private static int summon(CommandContext<CommandSourceStack> ctx) {
+        ServerPlayer player = resolveTarget(ctx);
         if (player == null) return 0;
 
         BotActions.summon(player);
         return 1;
     }
 
-    private static int dismiss(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = resolveTarget(ctx);
+    private static int dismiss(CommandContext<CommandSourceStack> ctx) {
+        ServerPlayer player = resolveTarget(ctx);
         if (player == null) return 0;
 
         BotActions.dismiss(player);
         return 1;
     }
 
-    private static int follow(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = resolveTarget(ctx);
+    private static int follow(CommandContext<CommandSourceStack> ctx) {
+        ServerPlayer player = resolveTarget(ctx);
         if (player == null) return 0;
 
         BotActions.follow(player);
         return 1;
     }
 
-    private static int stop(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = resolveTarget(ctx);
+    private static int stop(CommandContext<CommandSourceStack> ctx) {
+        ServerPlayer player = resolveTarget(ctx);
         if (player == null) return 0;
 
         BotActions.stop(player);
         return 1;
     }
 
-    private static int menu(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = resolveTarget(ctx);
+    private static int menu(CommandContext<CommandSourceStack> ctx) {
+        ServerPlayer player = resolveTarget(ctx);
         if (player == null) return 0;
 
         BotMenu.open(player);
         return 1;
     }
 
-    private static int remote(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = resolveTarget(ctx);
+    private static int remote(CommandContext<CommandSourceStack> ctx) {
+        ServerPlayer player = resolveTarget(ctx);
         if (player == null) return 0;
 
         BotRemoteItem.giveTo(player);
-        ctx.getSource().sendFeedback(() -> Text.literal("§a[Assistant] Bot Remote added to your inventory."), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("§a[Assistant] Bot Remote added to your inventory."), false);
         return 1;
     }
 
-    private static int mine(CommandContext<ServerCommandSource> ctx) {
+    private static int mine(CommandContext<CommandSourceStack> ctx) {
         AssistantBot bot = requireBot(ctx);
         if (bot == null) return 0;
 
-        BlockPos pos = BlockPosArgumentType.getBlockPos(ctx, "pos");
+        BlockPos pos = BlockPosArgument.getBlockPos(ctx, "pos");
         bot.setTask(new MineTask(pos));
-        ctx.getSource().sendFeedback(
-                () -> Text.literal("§a[Assistant] Mining at " + pos.toShortString()), false);
+        ctx.getSource().sendSuccess(
+                () -> Component.literal("§a[Assistant] Mining at " + pos.toShortString()), false);
         return 1;
     }
 
-    private static int place(CommandContext<ServerCommandSource> ctx) {
+    private static int place(CommandContext<CommandSourceStack> ctx) {
         AssistantBot bot = requireBot(ctx);
         if (bot == null) return 0;
 
         String blockId = StringArgumentType.getString(ctx, "block");
-        BlockPos pos = BlockPosArgumentType.getBlockPos(ctx, "pos");
+        BlockPos pos = BlockPosArgument.getBlockPos(ctx, "pos");
 
         if (!blockId.contains(":")) {
             blockId = "minecraft:" + blockId;
@@ -220,27 +219,27 @@ public class AssistantCommand {
 
         String finalBlockId = blockId;
         bot.setTask(new PlaceTask(pos, finalBlockId));
-        ctx.getSource().sendFeedback(
-                () -> Text.literal("§a[Assistant] Placing " + finalBlockId + " at " + pos.toShortString()),
+        ctx.getSource().sendSuccess(
+                () -> Component.literal("§a[Assistant] Placing " + finalBlockId + " at " + pos.toShortString()),
                 false);
         return 1;
     }
 
-    private static int deposit(CommandContext<ServerCommandSource> ctx) {
+    private static int deposit(CommandContext<CommandSourceStack> ctx) {
         AssistantBot bot = requireBot(ctx);
         if (bot == null) return 0;
 
         bot.setTask(new DepositTask());
-        ctx.getSource().sendFeedback(
-                () -> Text.literal("§a[Assistant] Depositing items to nearest container..."), false);
+        ctx.getSource().sendSuccess(
+                () -> Component.literal("§a[Assistant] Depositing items to nearest container..."), false);
         return 1;
     }
 
-    private static int build(CommandContext<ServerCommandSource> ctx) {
+    private static int build(CommandContext<CommandSourceStack> ctx) {
         AssistantBot bot = requireBot(ctx);
         if (bot == null) return 0;
 
-        ServerPlayerEntity player = resolveTarget(ctx);
+        ServerPlayer player = resolveTarget(ctx);
         if (player == null) return 0;
 
         String description = StringArgumentType.getString(ctx, "description");
@@ -248,29 +247,29 @@ public class AssistantCommand {
         PlanTask planTask = new PlanTask(description, player);
         planTask.setAutoExecute(true);
         bot.setTask(planTask);
-        ctx.getSource().sendFeedback(
-                () -> Text.literal("§a[Assistant] Planning and building: " + description + " (asking LLM...)"),
+        ctx.getSource().sendSuccess(
+                () -> Component.literal("§a[Assistant] Planning and building: " + description + " (asking LLM...)"),
                 false);
         return 1;
     }
 
-    private static int plan(CommandContext<ServerCommandSource> ctx) {
+    private static int plan(CommandContext<CommandSourceStack> ctx) {
         AssistantBot bot = requireBot(ctx);
         if (bot == null) return 0;
 
-        ServerPlayerEntity player = resolveTarget(ctx);
+        ServerPlayer player = resolveTarget(ctx);
         if (player == null) return 0;
 
         String description = StringArgumentType.getString(ctx, "description");
 
         bot.setTask(new PlanTask(description, player));
-        ctx.getSource().sendFeedback(
-                () -> Text.literal("§a[Assistant] Planning: " + description + " (asking LLM...)"),
+        ctx.getSource().sendSuccess(
+                () -> Component.literal("§a[Assistant] Planning: " + description + " (asking LLM...)"),
                 false);
         return 1;
     }
 
-    private static int execute(CommandContext<ServerCommandSource> ctx) {
+    private static int execute(CommandContext<CommandSourceStack> ctx) {
         AssistantBot bot = requireBot(ctx);
         if (bot == null) return 0;
 
@@ -278,27 +277,27 @@ public class AssistantCommand {
         BuildPlan plan = BuildPlanRegistry.getInstance().get(planId);
 
         if (plan == null) {
-            ctx.getSource().sendFeedback(
-                    () -> Text.literal("§c[Assistant] No plan found with ID: " + planId),
+            ctx.getSource().sendSuccess(
+                    () -> Component.literal("§c[Assistant] No plan found with ID: " + planId),
                     false);
             return 0;
         }
 
         BlockPos origin = bot.getBlockPos();
         bot.setTask(new BuildTask(planId, origin));
-        ctx.getSource().sendFeedback(
-                () -> Text.literal("§a[Assistant] Executing plan #" + planId + " (" + plan.getDescription()
+        ctx.getSource().sendSuccess(
+                () -> Component.literal("§a[Assistant] Executing plan #" + planId + " (" + plan.getDescription()
                         + " — " + plan.getBlockCount() + " blocks) at " + origin.toShortString()),
                 false);
         return 1;
     }
 
-    private static int listPlans(CommandContext<ServerCommandSource> ctx) {
+    private static int listPlans(CommandContext<CommandSourceStack> ctx) {
         var plans = BuildPlanRegistry.getInstance().getAll();
 
         if (plans.isEmpty()) {
-            ctx.getSource().sendFeedback(
-                    () -> Text.literal("§e[Assistant] No plans available. Use /assistant plan <description> to create one."),
+            ctx.getSource().sendSuccess(
+                    () -> Component.literal("§e[Assistant] No plans available. Use /assistant plan <description> to create one."),
                     false);
             return 1;
         }
@@ -312,12 +311,12 @@ public class AssistantCommand {
         }
 
         String output = sb.toString();
-        ctx.getSource().sendFeedback(() -> Text.literal(output), false);
+        ctx.getSource().sendSuccess(() -> Component.literal(output), false);
         return 1;
     }
 
-    private static int importPlan(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = resolveTarget(ctx);
+    private static int importPlan(CommandContext<CommandSourceStack> ctx) {
+        ServerPlayer player = resolveTarget(ctx);
         if (player == null) return 0;
 
         String url = StringArgumentType.getString(ctx, "url");
@@ -329,20 +328,20 @@ public class AssistantCommand {
         try {
             uri = URI.create(url);
             if (uri.getScheme() == null || (!uri.getScheme().equals("http") && !uri.getScheme().equals("https"))) {
-                ctx.getSource().sendFeedback(
-                        () -> Text.literal("§c[Assistant] Invalid URL — must start with http:// or https://"),
+                ctx.getSource().sendSuccess(
+                        () -> Component.literal("§c[Assistant] Invalid URL — must start with http:// or https://"),
                         false);
                 return 0;
             }
         } catch (Exception e) {
-            ctx.getSource().sendFeedback(
-                    () -> Text.literal("§c[Assistant] Invalid URL: " + e.getMessage()),
+            ctx.getSource().sendSuccess(
+                    () -> Component.literal("§c[Assistant] Invalid URL: " + e.getMessage()),
                     false);
             return 0;
         }
 
-        ctx.getSource().sendFeedback(
-                () -> Text.literal("§e[Assistant] Importing plan from URL..."),
+        ctx.getSource().sendSuccess(
+                () -> Component.literal("§e[Assistant] Importing plan from URL..."),
                 false);
 
         // Fetch, parse, sort, and store on a background thread
@@ -416,13 +415,13 @@ public class AssistantCommand {
         }).thenAccept(message -> {
             // Send result back on the server thread
             server.execute(() -> {
-                if (!player.isDisconnected()) {
+                if (!player.hasDisconnected()) {
                     if (message.contains("\n")) {
                         for (String line : message.split("\n")) {
-                            player.sendMessage(Text.literal(line));
+                            player.sendSystemMessage(Component.literal(line));
                         }
                     } else {
-                        player.sendMessage(Text.literal(message));
+                        player.sendSystemMessage(Component.literal(message));
                     }
                 }
             });
@@ -440,22 +439,22 @@ public class AssistantCommand {
         return false;
     }
 
-    private static int status(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = resolveTarget(ctx);
+    private static int status(CommandContext<CommandSourceStack> ctx) {
+        ServerPlayer player = resolveTarget(ctx);
         if (player == null) return 0;
 
         BotActions.status(player);
         return 1;
     }
 
-    private static AssistantBot requireBot(CommandContext<ServerCommandSource> ctx) {
-        ServerPlayerEntity player = resolveTarget(ctx);
+    private static AssistantBot requireBot(CommandContext<CommandSourceStack> ctx) {
+        ServerPlayer player = resolveTarget(ctx);
         if (player == null) return null;
 
-        AssistantBot bot = AssistantManager.getInstance().getBot(player.getUuid());
+        AssistantBot bot = AssistantManager.getInstance().getBot(player.getUUID());
         if (bot == null) {
-            ctx.getSource().sendFeedback(
-                    () -> Text.literal("§c[Assistant] No bot summoned. Use /assistant summon first."),
+            ctx.getSource().sendSuccess(
+                    () -> Component.literal("§c[Assistant] No bot summoned. Use /assistant summon first."),
                     false);
             return null;
         }

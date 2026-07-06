@@ -1,8 +1,5 @@
 package com.assistantbot.llm;
 
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -10,12 +7,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 
 /**
  * Shared source of truth for Minecraft block IDs accepted by this server.
  *
- * Fabric/Yarn exposes the authoritative runtime block registry through
- * Registries.BLOCK. Keep prompt instructions, diagnostics, and mechanical
+ * Minecraft exposes the authoritative runtime block registry through
+ * BuiltInRegistries.BLOCK. Keep prompt instructions, diagnostics, and mechanical
  * correction tied to that same registry so the LLM cannot drift from what the
  * game will actually accept.
  */
@@ -28,7 +27,7 @@ public final class BlockIdResolver {
     public static boolean isValidBlockId(String blockId) {
         String baseId = normalizeBaseId(blockId);
         Identifier id = Identifier.tryParse(baseId);
-        return id != null && Registries.BLOCK.containsId(id);
+        return id != null && BuiltInRegistries.BLOCK.containsKey(id);
     }
 
     public static String closestValidBlockId(String blockId) {
@@ -76,7 +75,7 @@ public final class BlockIdResolver {
 
     public static String buildAllowedBlockListForPrompt() {
         StringBuilder sb = new StringBuilder();
-        sb.append("Authoritative allowed block IDs from this server's Minecraft 1.21.11 block registry.\n");
+        sb.append("Authoritative allowed block IDs from this server's Minecraft 26.2 block registry.\n");
         sb.append("Use ONLY these base block IDs in palette values. For minecraft namespace entries, write the short name without ");
         sb.append("\"minecraft:\". For non-minecraft namespaces, keep the namespace.\n");
         sb.append("Optional block state suffixes may only be attached to one of these base IDs.\n\n");
@@ -113,14 +112,14 @@ public final class BlockIdResolver {
     }
 
     private static List<Identifier> sortedRegistryIds() {
-        List<Identifier> ids = new ArrayList<>(Registries.BLOCK.getIds());
+        List<Identifier> ids = new ArrayList<>(BuiltInRegistries.BLOCK.keySet());
         ids.sort(Comparator.comparing(Identifier::toString));
         return ids;
     }
 
     private static List<String> allowedPromptNames() {
         Set<String> names = new TreeSet<>();
-        for (Identifier id : Registries.BLOCK.getIds()) {
+        for (Identifier id : BuiltInRegistries.BLOCK.keySet()) {
             if (id.getNamespace().equals("minecraft")) {
                 names.add(id.getPath());
             } else {

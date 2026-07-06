@@ -2,8 +2,7 @@ package com.assistantbot;
 
 import com.assistantbot.bot.AssistantBot;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-
+import net.minecraft.server.level.ServerPlayer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,8 +23,8 @@ public class AssistantManager {
         return bots.get(ownerUuid);
     }
 
-    public AssistantBot summon(ServerPlayerEntity owner) {
-        UUID ownerUuid = owner.getUuid();
+    public AssistantBot summon(ServerPlayer owner) {
+        UUID ownerUuid = owner.getUUID();
 
         if (bots.containsKey(ownerUuid)) {
             remove(ownerUuid);
@@ -49,7 +48,7 @@ public class AssistantManager {
     }
 
     public void tick(MinecraftServer server) {
-        if (server.getTicks() % 5 != 0) return;
+        if (server.getTickCount() % 5 != 0) return;
 
         for (AssistantBot bot : new ArrayList<>(bots.values())) {
             bot.tick();

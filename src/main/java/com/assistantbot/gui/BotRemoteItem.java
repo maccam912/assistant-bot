@@ -1,17 +1,16 @@
 package com.assistantbot.gui;
 
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.LoreComponent;
-import net.minecraft.component.type.NbtComponent;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-
 import java.util.List;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.component.ItemLore;
 
 /**
  * The "Bot Remote" — a vanilla compass stamped with a {@code custom_data} marker
@@ -31,16 +30,16 @@ public final class BotRemoteItem {
     public static ItemStack create() {
         ItemStack stack = new ItemStack(Items.COMPASS);
 
-        NbtCompound nbt = new NbtCompound();
+        CompoundTag nbt = new CompoundTag();
         nbt.putBoolean(MARKER_KEY, true);
-        stack.set(DataComponentTypes.CUSTOM_DATA, NbtComponent.of(nbt));
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(nbt));
 
-        stack.set(DataComponentTypes.CUSTOM_NAME,
-                Text.literal("Bot Remote").styled(s -> s.withItalic(false).withColor(Formatting.GOLD)));
+        stack.set(DataComponents.CUSTOM_NAME,
+                Component.literal("Bot Remote").withStyle(s -> s.withItalic(false).withColor(ChatFormatting.GOLD)));
 
-        stack.set(DataComponentTypes.LORE, new LoreComponent(List.of(
-                Text.literal("Right-click to open the bot menu")
-                        .styled(s -> s.withItalic(false).withColor(Formatting.GRAY)))));
+        stack.set(DataComponents.LORE, new ItemLore(List.of(
+                Component.literal("Right-click to open the bot menu")
+                        .withStyle(s -> s.withItalic(false).withColor(ChatFormatting.GRAY)))));
 
         return stack;
     }
@@ -48,20 +47,20 @@ public final class BotRemoteItem {
     /** True if the given stack is a Bot Remote. */
     public static boolean isRemote(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return false;
-        NbtComponent data = stack.get(DataComponentTypes.CUSTOM_DATA);
-        return data != null && data.copyNbt().contains(MARKER_KEY);
+        CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        return data != null && data.copyTag().contains(MARKER_KEY);
     }
 
     /** Gives the player a remote if they don't already have one in their inventory. */
-    public static void giveTo(ServerPlayerEntity player) {
-        PlayerInventory inv = player.getInventory();
-        for (int i = 0; i < inv.size(); i++) {
-            if (isRemote(inv.getStack(i))) {
+    public static void giveTo(ServerPlayer player) {
+        Inventory inv = player.getInventory();
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            if (isRemote(inv.getItem(i))) {
                 return; // already has one
             }
         }
-        if (!player.giveItemStack(create())) {
-            player.dropItem(create(), false);
+        if (!player.addItem(create())) {
+            player.drop(create(), false);
         }
     }
 }

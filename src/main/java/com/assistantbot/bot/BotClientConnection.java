@@ -2,11 +2,11 @@ package com.assistantbot.bot;
 
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.embedded.EmbeddedChannel;
-import net.minecraft.network.ClientConnection;
-import net.minecraft.network.NetworkSide;
-import net.minecraft.network.listener.PacketListener;
-import net.minecraft.network.packet.Packet;
-import net.minecraft.network.state.NetworkState;
+import net.minecraft.network.Connection;
+import net.minecraft.network.PacketListener;
+import net.minecraft.network.ProtocolInfo;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketFlow;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -16,10 +16,10 @@ import org.jetbrains.annotations.Nullable;
  *
  * Follows the Carpet mod's FakeClientConnection pattern.
  */
-public class BotClientConnection extends ClientConnection {
+public class BotClientConnection extends Connection {
 
     public BotClientConnection() {
-        super(NetworkSide.SERVERBOUND);
+        super(PacketFlow.SERVERBOUND);
     }
 
     @Override
@@ -32,10 +32,10 @@ public class BotClientConnection extends ClientConnection {
     }
 
     @Override
-    public void setInitialPacketListener(PacketListener packetListener) {
+    public void setListenerForServerboundHandshake(PacketListener packetListener) {
     }
 
     @Override
-    public <T extends PacketListener> void transitionInbound(NetworkState<T> state, T packetListener) {
+    public <T extends PacketListener> void setupInboundProtocol(ProtocolInfo<T> state, T packetListener) {
     }
 }

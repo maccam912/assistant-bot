@@ -4,13 +4,12 @@ import com.assistantbot.bot.AssistantBot;
 import com.assistantbot.util.InventoryHelper;
 import com.assistantbot.util.LookHelper;
 import com.assistantbot.util.NavigationHelper;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.mob.HostileEntity;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
-
 import java.util.List;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Reactive combat: triggered by health-drop interrupt in AssistantBot.
@@ -100,10 +99,10 @@ public class CombatTask implements BotTask {
             return TickResult.CONTINUE;
         }
 
-        Vec3d targetPos = targetEntity.getEntityPos();
+        Vec3 targetPos = targetEntity.position();
         double distance = bot.getPos().distanceTo(targetPos);
 
-        LookHelper.lookAt(bot.getFakePlayer(), targetPos.add(0, targetEntity.getHeight() / 2, 0));
+        LookHelper.lookAt(bot.getFakePlayer(), targetPos.add(0, targetEntity.getBbHeight() / 2, 0));
 
         if (distance <= ATTACK_RANGE) {
             NavigationHelper.stopMoving(bot);
@@ -132,7 +131,7 @@ public class CombatTask implements BotTask {
             return TickResult.CONTINUE;
         }
 
-        Vec3d targetPos = targetEntity.getEntityPos();
+        Vec3 targetPos = targetEntity.position();
         double distance = bot.getPos().distanceTo(targetPos);
 
         if (distance > ATTACK_RANGE + 1) {
@@ -141,7 +140,7 @@ public class CombatTask implements BotTask {
             return TickResult.CONTINUE;
         }
 
-        LookHelper.lookAt(bot.getFakePlayer(), targetPos.add(0, targetEntity.getHeight() / 2, 0));
+        LookHelper.lookAt(bot.getFakePlayer(), targetPos.add(0, targetEntity.getBbHeight() / 2, 0));
 
         if (attackCooldown <= 0) {
             bot.getFakePlayer().attack(targetEntity);
@@ -159,21 +158,21 @@ public class CombatTask implements BotTask {
      * Falls back to the bot's position if the owner is offline.
      */
     private Entity findNearestHostile(AssistantBot bot) {
-        ServerPlayerEntity owner = bot.getOwnerPlayer();
-        Vec3d scanCenter = (owner != null) ? owner.getEntityPos() : bot.getPos();
-        Box searchBox = new Box(
+        ServerPlayer owner = bot.getOwnerPlayer();
+        Vec3 scanCenter = (owner != null) ? owner.position() : bot.getPos();
+        AABB searchBox = new AABB(
                 scanCenter.x - SCAN_RADIUS_HORIZONTAL, scanCenter.y - SCAN_RADIUS_VERTICAL, scanCenter.z - SCAN_RADIUS_HORIZONTAL,
                 scanCenter.x + SCAN_RADIUS_HORIZONTAL, scanCenter.y + SCAN_RADIUS_VERTICAL, scanCenter.z + SCAN_RADIUS_HORIZONTAL
         );
 
-        List<HostileEntity> hostiles = bot.getWorld().getEntitiesByClass(
-                HostileEntity.class, searchBox, Entity::isAlive
+        List<Monster> hostiles = bot.getWorld().getEntitiesOfClass(
+                Monster.class, searchBox, Entity::isAlive
         );
 
         return hostiles.stream()
                 .min((a, b) -> Double.compare(
-                        a.squaredDistanceTo(scanCenter.x, scanCenter.y, scanCenter.z),
-                        b.squaredDistanceTo(scanCenter.x, scanCenter.y, scanCenter.z)))
+                        a.distanceToSqr(scanCenter.x, scanCenter.y, scanCenter.z),
+                        b.distanceToSqr(scanCenter.x, scanCenter.y, scanCenter.z)))
                 .orElse(null);
     }
 

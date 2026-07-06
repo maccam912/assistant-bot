@@ -4,10 +4,10 @@ import com.assistantbot.bot.AssistantBot;
 import com.assistantbot.util.InventoryHelper;
 import com.assistantbot.util.LookHelper;
 import com.assistantbot.util.NavigationHelper;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.Container;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Find the nearest container and deposit all inventory into it. Phases:
@@ -52,7 +52,7 @@ public class DepositTask implements BotTask {
     }
 
     private TickResult tickApproaching(AssistantBot bot) {
-        Vec3d targetCenter = Vec3d.ofCenter(containerPos);
+        Vec3 targetCenter = Vec3.atCenterOf(containerPos);
         double distance = bot.getPos().distanceTo(targetCenter);
 
         if (distance <= 3.0) {
@@ -69,7 +69,7 @@ public class DepositTask implements BotTask {
 
     private TickResult tickDepositing(AssistantBot bot) {
         BlockEntity blockEntity = bot.getWorld().getBlockEntity(containerPos);
-        if (!(blockEntity instanceof Inventory container)) {
+        if (!(blockEntity instanceof Container container)) {
             return TickResult.FAILED;
         }
 
@@ -86,10 +86,10 @@ public class DepositTask implements BotTask {
         for (int x = -SEARCH_RADIUS; x <= SEARCH_RADIUS; x++) {
             for (int y = -SEARCH_RADIUS / 2; y <= SEARCH_RADIUS / 2; y++) {
                 for (int z = -SEARCH_RADIUS; z <= SEARCH_RADIUS; z++) {
-                    BlockPos pos = botPos.add(x, y, z);
+                    BlockPos pos = botPos.offset(x, y, z);
                     BlockEntity be = bot.getWorld().getBlockEntity(pos);
-                    if (be instanceof Inventory) {
-                        double dist = botPos.getSquaredDistance(pos);
+                    if (be instanceof Container) {
+                        double dist = botPos.distSqr(pos);
                         if (dist < nearestDist) {
                             nearestDist = dist;
                             nearest = pos;

@@ -510,7 +510,7 @@ public class VxbDiagnostics {
         String baseId = BlockIdResolver.normalizeBaseId(fullBlockId);
         if (!BlockIdResolver.isValidBlockId(fullBlockId)) {
             result.add(Severity.BLOCKER, "Invalid Minecraft Block ID",
-                    "Block '" + baseId + "' does not exist in the Minecraft 1.21.11 block registry.", lineNum);
+                    "Block '" + baseId + "' does not exist in the Minecraft 26.2 block registry.", lineNum);
         }
 
     }

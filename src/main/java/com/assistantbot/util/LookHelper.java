@@ -1,8 +1,8 @@
 package com.assistantbot.util;
 
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Set the fake player's yaw/pitch to face a world position.
@@ -10,8 +10,8 @@ import net.minecraft.util.math.Vec3d;
 public final class LookHelper {
     private LookHelper() {}
 
-    public static void lookAt(ServerPlayerEntity player, Vec3d target) {
-        Vec3d eyePos = player.getEyePos();
+    public static void lookAt(ServerPlayer player, Vec3 target) {
+        Vec3 eyePos = player.getEyePosition();
         double dx = target.x - eyePos.x;
         double dy = target.y - eyePos.y;
         double dz = target.z - eyePos.z;
@@ -22,8 +22,8 @@ public final class LookHelper {
         float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
         float pitch = (float) -Math.toDegrees(Math.atan2(dy, horizontalDist));
 
-        player.setYaw(yaw);
-        player.setPitch(MathHelper.clamp(pitch, -90.0f, 90.0f));
-        player.setHeadYaw(yaw);
+        player.setYRot(yaw);
+        player.setXRot(Mth.clamp(pitch, -90.0f, 90.0f));
+        player.setYHeadRot(yaw);
     }
 }

@@ -8,19 +8,18 @@ import com.assistantbot.llm.BuildPlanRegistry;
 import com.assistantbot.llm.BuildStructure.BlockEntry;
 import com.assistantbot.util.LookHelper;
 import com.assistantbot.util.NavigationHelper;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.math.Vec3i;
-
 import java.util.*;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Execute phase of the build pipeline: looks up a stored plan from
@@ -147,8 +146,8 @@ public class BuildTask implements BotTask {
             maxY = Math.max(maxY, entry.y());
             maxZ = Math.max(maxZ, entry.z());
         }
-        clearMin = originPos.add(new Vec3i(minX, minY, minZ));
-        clearMax = originPos.add(new Vec3i(maxX, maxY, maxZ));
+        clearMin = originPos.offset(new Vec3i(minX, minY, minZ));
+        clearMax = originPos.offset(new Vec3i(maxX, maxY, maxZ));
     }
 
     private TickResult tickClearing(AssistantBot bot) {
@@ -158,20 +157,20 @@ public class BuildTask implements BotTask {
             return TickResult.CONTINUE;
         }
 
-        ServerWorld world = bot.getWorld();
-        BlockState air = Blocks.AIR.getDefaultState();
+        ServerLevel world = bot.getWorld();
+        BlockState air = Blocks.AIR.defaultBlockState();
 
         for (int x = clearMin.getX(); x <= clearMax.getX(); x++) {
             for (int z = clearMin.getZ(); z <= clearMax.getZ(); z++) {
                 BlockPos pos = new BlockPos(x, clearCurrentY, z);
                 if (!world.getBlockState(pos).isAir()) {
-                    world.setBlockState(pos, air, Block.NOTIFY_ALL);
+                    world.setBlock(pos, air, Block.UPDATE_ALL);
                     totalCleared++;
                 }
             }
         }
 
-        Vec3d layerCenter = new Vec3d(
+        Vec3 layerCenter = new Vec3(
                 (clearMin.getX() + clearMax.getX()) / 2.0 + 0.5,
                 clearCurrentY + 0.5,
                 (clearMin.getZ() + clearMax.getZ()) / 2.0 + 0.5
@@ -202,7 +201,7 @@ public class BuildTask implements BotTask {
             }
 
             BlockEntry entry = sortedBlocks.get(currentBlockIndex);
-            BlockPos worldPos = originPos.add(new Vec3i(entry.x(), entry.y(), entry.z()));
+            BlockPos worldPos = originPos.offset(new Vec3i(entry.x(), entry.y(), entry.z()));
             boolean placed = attemptPlacementThisTick(bot, entry);
 
             if (placed) {
@@ -234,7 +233,7 @@ public class BuildTask implements BotTask {
 
         int blockIdx = retryQueue.remove(0);
         BlockEntry entry = sortedBlocks.get(blockIdx);
-        BlockPos worldPos = originPos.add(new Vec3i(entry.x(), entry.y(), entry.z()));
+        BlockPos worldPos = originPos.offset(new Vec3i(entry.x(), entry.y(), entry.z()));
         boolean placed = attemptPlacementThisTick(bot, entry);
 
         if (placed) {
@@ -258,8 +257,8 @@ public class BuildTask implements BotTask {
         if (entry.blockId().equals("minecraft:air") || entry.blockId().equals("air")) {
             return true;
         }
-        BlockPos worldPos = originPos.add(new Vec3i(entry.x(), entry.y(), entry.z()));
-        Vec3d targetCenter = Vec3d.ofCenter(worldPos);
+        BlockPos worldPos = originPos.offset(new Vec3i(entry.x(), entry.y(), entry.z()));
+        Vec3 targetCenter = Vec3.atCenterOf(worldPos);
         double distance = bot.getPos().distanceTo(targetCenter);
 
         if (distance > VISUAL_REPOSITION_TELEPORT_DISTANCE) {
@@ -277,10 +276,10 @@ public class BuildTask implements BotTask {
         return placeBlockServerEnforced(bot.getWorld(), worldPos, entry.blockId());
     }
 
-    private void snapCloseToTarget(AssistantBot bot, Vec3d targetCenter) {
+    private void snapCloseToTarget(AssistantBot bot, Vec3 targetCenter) {
         var player = bot.getFakePlayer();
-        Vec3d currentPos = player.getEntityPos();
-        Vec3d delta = targetCenter.subtract(currentPos);
+        Vec3 currentPos = player.position();
+        Vec3 delta = targetCenter.subtract(currentPos);
         double distance = delta.length();
 
         if (distance <= VISUAL_SNAP_RADIUS) {
@@ -295,17 +294,17 @@ public class BuildTask implements BotTask {
             return;
         }
 
-        Vec3d snapped = currentPos.add(delta.normalize().multiply(step));
-        Vec3d bounded = new Vec3d(
+        Vec3 snapped = currentPos.add(delta.normalize().scale(step));
+        Vec3 bounded = new Vec3(
                 clamp(snapped.x, clearMin.getX() + 0.5, clearMax.getX() + 0.5),
                 clamp(snapped.y, clearMin.getY(), clearMax.getY() + 1.0),
                 clamp(snapped.z, clearMin.getZ() + 0.5, clearMax.getZ() + 0.5)
         );
-        player.refreshPositionAndAngles(
+        player.snapTo(
                 bounded.x,
                 bounded.y,
                 bounded.z,
-                player.getYaw(), player.getPitch()
+                player.getYRot(), player.getXRot()
         );
     }
 
@@ -313,32 +312,32 @@ public class BuildTask implements BotTask {
         return Math.max(min, Math.min(max, value));
     }
 
-    private boolean placeBlockServerEnforced(ServerWorld world, BlockPos pos, String blockId) {
+    private boolean placeBlockServerEnforced(ServerLevel world, BlockPos pos, String blockId) {
         Identifier id = Identifier.tryParse(BlockIdResolver.normalizeBaseId(blockId));
         if (id == null) {
             AssistantMod.LOGGER.warn("Invalid block ID: {}", blockId);
             return false;
         }
 
-        if (!Registries.BLOCK.containsId(id)) {
+        if (!BuiltInRegistries.BLOCK.containsKey(id)) {
             AssistantMod.LOGGER.warn("Unknown block ID (LLM hallucination?): {}", blockId);
             return false;
         }
 
-        Block block = Registries.BLOCK.get(id);
+        Block block = BuiltInRegistries.BLOCK.getValue(id);
         if (block == Blocks.AIR && !id.toString().equals("minecraft:air")) {
             AssistantMod.LOGGER.warn("Unknown block ID (LLM hallucination?): {}", blockId);
             return false;
         }
 
-        BlockState state = block.getDefaultState();
-        boolean success = world.setBlockState(pos, state, Block.NOTIFY_ALL);
+        BlockState state = block.defaultBlockState();
+        boolean success = world.setBlock(pos, state, Block.UPDATE_ALL);
 
         if (success) {
             BlockState actual = world.getBlockState(pos);
             if (actual.getBlock() != block) {
                 AssistantMod.LOGGER.warn("Block verification failed at {}: expected {}, got {}",
-                        pos, blockId, Registries.BLOCK.getId(actual.getBlock()));
+                        pos, blockId, BuiltInRegistries.BLOCK.getKey(actual.getBlock()));
                 return false;
             }
         }
@@ -349,9 +348,9 @@ public class BuildTask implements BotTask {
     // --- Helpers ---
 
     private void sendMessage(AssistantBot bot, String message) {
-        ServerPlayerEntity owner = bot.getOwnerPlayer();
-        if (owner != null && !owner.isDisconnected()) {
-            owner.sendMessage(Text.literal(message));
+        ServerPlayer owner = bot.getOwnerPlayer();
+        if (owner != null && !owner.hasDisconnected()) {
+            owner.sendSystemMessage(Component.literal(message));
         }
     }
 

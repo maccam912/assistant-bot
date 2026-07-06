@@ -5,11 +5,11 @@ import com.assistantbot.util.BlockHelper;
 import com.assistantbot.util.InventoryHelper;
 import com.assistantbot.util.LookHelper;
 import com.assistantbot.util.NavigationHelper;
-import net.minecraft.item.Item;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Place a specific block type at a target position. Phases:
@@ -42,7 +42,7 @@ public class PlaceTask implements BotTask {
     }
 
     private TickResult tickApproaching(AssistantBot bot) {
-        Vec3d targetCenter = Vec3d.ofCenter(targetPos);
+        Vec3 targetCenter = Vec3.atCenterOf(targetPos);
         double distance = bot.getPos().distanceTo(targetCenter);
 
         if (distance <= BlockHelper.REACH_DISTANCE) {
@@ -58,8 +58,8 @@ public class PlaceTask implements BotTask {
     }
 
     private TickResult tickEquipping(AssistantBot bot) {
-        Identifier id = Identifier.of(blockId);
-        Item item = Registries.ITEM.get(id);
+        Identifier id = Identifier.parse(blockId);
+        Item item = BuiltInRegistries.ITEM.getValue(id);
 
         boolean equipped = InventoryHelper.equipItem(bot.getFakePlayer(), item);
         if (!equipped) {
@@ -71,7 +71,7 @@ public class PlaceTask implements BotTask {
     }
 
     private TickResult tickPlacing(AssistantBot bot) {
-        LookHelper.lookAt(bot.getFakePlayer(), Vec3d.ofCenter(targetPos));
+        LookHelper.lookAt(bot.getFakePlayer(), Vec3.atCenterOf(targetPos));
         boolean placed = BlockHelper.placeBlock(bot, targetPos);
 
         if (placed) {

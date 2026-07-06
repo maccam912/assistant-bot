@@ -4,9 +4,9 @@ import com.assistantbot.AssistantMod;
 import com.assistantbot.bot.AssistantBot;
 import com.assistantbot.bot.BotPlayer;
 import com.assistantbot.nav.BotPathfinder;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Movement primitives for the fake player. Provides two levels of navigation:
@@ -37,13 +37,13 @@ public final class NavigationHelper {
      * This should be called from the task tick (~4Hz) to update direction;
      * the actual movement happens continuously at 20Hz between calls.
      */
-    public static void moveToward(AssistantBot bot, Vec3d target, double speed) {
+    public static void moveToward(AssistantBot bot, Vec3 target, double speed) {
         // Apply downed-state speed penalty
         speed *= bot.getSpeedMultiplier();
 
-        ServerPlayerEntity player = bot.getFakePlayer();
+        ServerPlayer player = bot.getFakePlayer();
         BotPlayer botPlayer = (BotPlayer) player;
-        Vec3d currentPos = player.getEntityPos();
+        Vec3 currentPos = player.position();
 
         double dx = target.x - currentPos.x;
         double dy = target.y - currentPos.y;
@@ -60,13 +60,13 @@ public final class NavigationHelper {
 
         // Set the persistent horizontal velocity — BotPlayer.tick() re-applies
         // this every tick so movement is smooth between task updates.
-        botPlayer.setDesiredHorizontalVelocity(new Vec3d(velX, 0, velZ));
+        botPlayer.setDesiredHorizontalVelocity(new Vec3(velX, 0, velZ));
 
         // Jump if needed: either waypoint is above us, or blocked ahead.
         boolean waypointAbove = dy > 0.5 && horizontalDist < 2.0;
         if (waypointAbove || shouldJump(bot, velX, velZ)) {
-            if (player.isOnGround()) {
-                player.setVelocity(player.getVelocity().add(0, JUMP_VELOCITY - player.getVelocity().y, 0));
+            if (player.onGround()) {
+                player.setDeltaMovement(player.getDeltaMovement().add(0, JUMP_VELOCITY - player.getDeltaMovement().y, 0));
             }
         }
     }
@@ -82,12 +82,12 @@ public final class NavigationHelper {
      */
     public static boolean navigateTo(AssistantBot bot, BlockPos target, double speed) {
         BotPathfinder pathfinder = bot.getPathfinder();
-        Vec3d nextWaypoint = pathfinder.getNextWaypoint(target);
+        Vec3 nextWaypoint = pathfinder.getNextWaypoint(target);
 
         if (nextWaypoint == null) {
             // No path or already at target — check if we're close enough
             // to just walk directly (handles the last-meter case)
-            Vec3d targetVec = Vec3d.ofCenter(target);
+            Vec3 targetVec = Vec3.atCenterOf(target);
             double dist = bot.getPos().distanceTo(targetVec);
             if (dist < 2.0) {
                 AssistantMod.LOGGER.info("navigateTo: at destination (dist={}), stopping", String.format("%.1f", dist));
@@ -106,11 +106,11 @@ public final class NavigationHelper {
     }
 
     /**
-     * Navigate to a Vec3d target using A* pathfinding. Converts to BlockPos
+     * Navigate to a Vec3 target using A* pathfinding. Converts to BlockPos
      * for path computation, walks toward exact waypoints.
      */
-    public static boolean navigateTo(AssistantBot bot, Vec3d target, double speed) {
-        return navigateTo(bot, BlockPos.ofFloored(target), speed);
+    public static boolean navigateTo(AssistantBot bot, Vec3 target, double speed) {
+        return navigateTo(bot, BlockPos.containing(target), speed);
     }
 
     /**
@@ -121,38 +121,38 @@ public final class NavigationHelper {
         BotPlayer botPlayer = (BotPlayer) bot.getFakePlayer();
         botPlayer.setDesiredHorizontalVelocity(null);
         // Zero out any remaining horizontal velocity immediately.
-        Vec3d vel = botPlayer.getVelocity();
-        botPlayer.setVelocity(0, vel.y, 0);
+        Vec3 vel = botPlayer.getDeltaMovement();
+        botPlayer.setDeltaMovement(0, vel.y, 0);
     }
 
-    public static void teleportNear(AssistantBot bot, Vec3d target) {
-        ServerPlayerEntity player = bot.getFakePlayer();
+    public static void teleportNear(AssistantBot bot, Vec3 target) {
+        ServerPlayer player = bot.getFakePlayer();
         double angle = Math.random() * Math.PI * 2;
-        player.refreshPositionAndAngles(
+        player.snapTo(
                 target.x + Math.cos(angle) * 2,
                 target.y,
                 target.z + Math.sin(angle) * 2,
-                player.getYaw(), player.getPitch()
+                player.getYRot(), player.getXRot()
         );
     }
 
-    public static boolean isNearby(AssistantBot bot, Vec3d target, double radius) {
+    public static boolean isNearby(AssistantBot bot, Vec3 target, double radius) {
         return bot.getPos().distanceTo(target) <= radius;
     }
 
     private static boolean shouldJump(AssistantBot bot, double moveX, double moveZ) {
-        ServerPlayerEntity player = bot.getFakePlayer();
-        if (!player.isOnGround()) return false;
+        ServerPlayer player = bot.getFakePlayer();
+        if (!player.onGround()) return false;
 
-        Vec3d pos = player.getEntityPos();
-        BlockPos ahead = BlockPos.ofFloored(
+        Vec3 pos = player.position();
+        BlockPos ahead = BlockPos.containing(
                 pos.x + moveX * 2,
                 pos.y,
                 pos.z + moveZ * 2
         );
 
         boolean blockedAhead = !bot.getWorld().getBlockState(ahead).isAir();
-        boolean canStepUp = bot.getWorld().getBlockState(ahead.up()).isAir();
+        boolean canStepUp = bot.getWorld().getBlockState(ahead.above()).isAir();
 
         return blockedAhead && canStepUp;
     }

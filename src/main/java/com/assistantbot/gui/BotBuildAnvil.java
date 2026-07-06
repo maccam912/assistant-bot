@@ -1,15 +1,15 @@
 package com.assistantbot.gui;
 
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.screen.AnvilScreenHandler;
-import net.minecraft.screen.ScreenHandlerContext;
-import net.minecraft.screen.SimpleNamedScreenHandlerFactory;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.SimpleMenuProvider;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AnvilMenu;
+import net.minecraft.world.inventory.ContainerLevelAccess;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 /**
  * Server-side free-text input for builds, via an anvil's rename box. The player
@@ -24,51 +24,51 @@ public final class BotBuildAnvil {
     private BotBuildAnvil() {}
 
     /** Opens the build text-input anvil for the player. */
-    public static void open(ServerPlayerEntity player) {
-        player.openHandledScreen(new SimpleNamedScreenHandlerFactory(
+    public static void open(ServerPlayer player) {
+        player.openMenu(new SimpleMenuProvider(
                 (syncId, inventory, p) -> new Handler(syncId, inventory),
-                Text.literal("Type your build, then take the paper →")));
+                Component.literal("Type your build, then take the paper →")));
     }
 
-    public static class Handler extends AnvilScreenHandler {
+    public static class Handler extends AnvilMenu {
         private String typedName = "";
 
-        public Handler(int syncId, PlayerInventory playerInventory) {
-            super(syncId, playerInventory, ScreenHandlerContext.EMPTY);
+        public Handler(int syncId, Inventory playerInventory) {
+            super(syncId, playerInventory, ContainerLevelAccess.NULL);
             // Seed the left slot so the anvil has something to "rename" into output.
             ItemStack prompt = new ItemStack(Items.PAPER);
-            prompt.set(DataComponentTypes.CUSTOM_NAME,
-                    Text.literal("a house").styled(s -> s.withItalic(false)));
-            this.input.setStack(0, prompt);
+            prompt.set(DataComponents.CUSTOM_NAME,
+                    Component.literal("a house").withStyle(s -> s.withItalic(false)));
+            this.inputSlots.setItem(0, prompt);
         }
 
         @Override
-        public boolean setNewItemName(String newName) {
+        public boolean setItemName(String newName) {
             this.typedName = newName == null ? "" : newName;
-            return super.setNewItemName(newName);
+            return super.setItemName(newName);
         }
 
         @Override
-        public boolean canUse(PlayerEntity player) {
+        public boolean stillValid(Player player) {
             return true; // opened without a real anvil block
         }
 
         @Override
-        protected boolean canTakeOutput(PlayerEntity player, boolean present) {
+        protected boolean mayPickup(Player player, boolean present) {
             return present; // no XP cost required
         }
 
         @Override
-        protected void onTakeOutput(PlayerEntity player, ItemStack stack) {
+        protected void onTake(Player player, ItemStack stack) {
             String description = typedName.trim();
-            this.setCursorStack(ItemStack.EMPTY); // don't hand the player the paper
-            if (player instanceof ServerPlayerEntity sp) {
-                sp.closeHandledScreen();
+            this.setCarried(ItemStack.EMPTY); // don't hand the player the paper
+            if (player instanceof ServerPlayer sp) {
+                sp.closeContainer();
                 if (!description.isEmpty()) {
-                    ((net.minecraft.server.world.ServerWorld) sp.getEntityWorld())
+                    ((net.minecraft.server.level.ServerLevel) sp.level())
                             .getServer().execute(() -> BotActions.build(sp, description));
                 } else {
-                    sp.sendMessage(Text.literal("§e[Assistant] No build text entered."), false);
+                    sp.sendSystemMessage(Component.literal("§e[Assistant] No build text entered."), false);
                 }
             }
         }

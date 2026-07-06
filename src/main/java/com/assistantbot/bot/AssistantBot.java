@@ -9,16 +9,15 @@ import com.assistantbot.task.IdleTask;
 import com.assistantbot.task.PlanTask;
 import com.assistantbot.task.TickResult;
 import com.mojang.authlib.GameProfile;
-import net.minecraft.entity.Entity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.Hand;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Core bot class wrapping a BotPlayer. Owns the state machine that drives
@@ -30,7 +29,7 @@ public class AssistantBot {
     private final UUID ownerUuid;
     private final String ownerName;
     private final UUID botUuid;
-    private ServerWorld world;
+    private ServerLevel world;
     private BotPlayer botPlayer;
 
     private BotTask currentTask;
@@ -45,23 +44,23 @@ public class AssistantBot {
 
     private long downedUntilTick = -1; // -1 = not downed; uses -1 sentinel to avoid tick-0 edge case
 
-    public AssistantBot(ServerPlayerEntity owner) {
-        this.ownerUuid = owner.getUuid();
+    public AssistantBot(ServerPlayer owner) {
+        this.ownerUuid = owner.getUUID();
         this.ownerName = owner.getName().getString();
         this.botUuid = UUID.randomUUID();
-        this.world = (ServerWorld) owner.getEntityWorld();
+        this.world = (ServerLevel) owner.level();
 
         GameProfile profile = new GameProfile(botUuid, "[Bot]" + ownerName);
         this.botPlayer = new BotPlayer(world.getServer(), world, profile);
 
-        Vec3d ownerPos = owner.getEntityPos();
+        Vec3 ownerPos = owner.position();
         this.botPlayer.spawn(
                 ownerPos.x + 1, ownerPos.y, ownerPos.z + 1,
-                owner.getYaw(), owner.getPitch()
+                owner.getYRot(), owner.getXRot()
         );
 
         // Arm the bot with a netherite sword
-        this.botPlayer.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.NETHERITE_SWORD));
+        this.botPlayer.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.NETHERITE_SWORD));
 
         this.currentTask = new IdleTask();
         this.lastKnownHealth = botPlayer.getHealth();
@@ -69,7 +68,7 @@ public class AssistantBot {
         this.pathfinder = new BotPathfinder(this);
         this.botPlayer.setOnLethalDamageCallback(this::onLethalDamage);
 
-        AssistantMod.LOGGER.info("Assistant bot spawned for {} at {}", ownerName, botPlayer.getBlockPos());
+        AssistantMod.LOGGER.info("Assistant bot spawned for {} at {}", ownerName, botPlayer.blockPosition());
     }
 
     public void tick() {
@@ -86,7 +85,7 @@ public class AssistantBot {
         }
 
         lastKnownHealth = botPlayer.getHealth();
-        ServerPlayerEntity owner = getOwnerPlayer();
+        ServerPlayer owner = getOwnerPlayer();
         if (owner != null) {
             lastKnownOwnerHealth = owner.getHealth();
         }
@@ -104,15 +103,15 @@ public class AssistantBot {
         }
 
         // Check 2: owner took damage
-        ServerPlayerEntity owner = getOwnerPlayer();
+        ServerPlayer owner = getOwnerPlayer();
         if (owner != null) {
             float ownerHealth = owner.getHealth();
             if (ownerHealth < lastKnownOwnerHealth) {
-                Entity attacker = owner.getAttacker();
+                Entity attacker = owner.getLastHurtByMob();
                 enterCombat(attacker);
                 AssistantMod.LOGGER.info("Bot entering combat — owner attacked (owner health {} -> {}, attacker: {})",
                         lastKnownOwnerHealth, ownerHealth,
-                        attacker != null ? attacker.getType().getName().getString() : "unknown");
+                        attacker != null ? attacker.getType().getDescription().getString() : "unknown");
             }
         }
     }
@@ -160,7 +159,7 @@ public class AssistantBot {
      */
     public double getSpeedMultiplier() {
         if (downedUntilTick >= 0) {
-            long currentTick = world.getServer().getTicks();
+            long currentTick = world.getServer().getTickCount();
             if (currentTick < downedUntilTick) {
                 return DOWNED_SPEED_MULTIPLIER;
             } else {
@@ -175,13 +174,13 @@ public class AssistantBot {
         // Already downed — don't spam the log
         if (downedUntilTick >= 0) return;
 
-        int armor = botPlayer.getArmor();
+        int armor = botPlayer.getArmorValue();
         if (armor >= ARMOR_THRESHOLD) {
             AssistantMod.LOGGER.info("Lethal damage absorbed by armor (armor={}), no slowdown", armor);
             return;
         }
 
-        long currentTick = world.getServer().getTicks();
+        long currentTick = world.getServer().getTickCount();
         downedUntilTick = currentTick + DOWNED_DURATION_TICKS;
         AssistantMod.LOGGER.info("Bot downed! Moving at 25% speed for 2 minutes (armor={})", armor);
     }
@@ -212,24 +211,24 @@ public class AssistantBot {
 
     // --- Accessors ---
 
-    public ServerPlayerEntity getFakePlayer() { return botPlayer; }
-    public ServerWorld getWorld() { return world; }
+    public ServerPlayer getFakePlayer() { return botPlayer; }
+    public ServerLevel getWorld() { return world; }
     public UUID getOwnerUuid() { return ownerUuid; }
     public String getOwnerName() { return ownerName; }
     public BotTask getCurrentTask() { return currentTask; }
     public BotPathfinder getPathfinder() { return pathfinder; }
 
-    public ServerPlayerEntity getOwnerPlayer() {
-        return world.getServer().getPlayerManager().getPlayer(ownerUuid);
+    public ServerPlayer getOwnerPlayer() {
+        return world.getServer().getPlayerList().getPlayer(ownerUuid);
     }
 
-    public Vec3d getPos() { return botPlayer.getEntityPos(); }
-    public BlockPos getBlockPos() { return botPlayer.getBlockPos(); }
+    public Vec3 getPos() { return botPlayer.position(); }
+    public BlockPos getBlockPos() { return botPlayer.blockPosition(); }
 
     public String getStatusString() {
         String taskStatus = currentTask.getStatusString();
         if (downedUntilTick >= 0) {
-            long currentTick = world.getServer().getTicks();
+            long currentTick = world.getServer().getTickCount();
             if (currentTick < downedUntilTick) {
                 long remainingTicks = downedUntilTick - currentTick;
                 long remainingSeconds = remainingTicks / 20;

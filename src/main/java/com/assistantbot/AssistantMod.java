@@ -8,8 +8,8 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.ActionResult;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,17 +31,17 @@ public class AssistantMod implements ModInitializer {
 
         // Right-clicking the Bot Remote opens the menu (server-side only).
         UseItemCallback.EVENT.register((player, world, hand) -> {
-            if (!world.isClient()
-                    && player instanceof ServerPlayerEntity serverPlayer
-                    && BotRemoteItem.isRemote(player.getStackInHand(hand))) {
+            if (!world.isClientSide()
+                    && player instanceof ServerPlayer serverPlayer
+                    && BotRemoteItem.isRemote(player.getItemInHand(hand))) {
                 BotMenu.open(serverPlayer);
                 // Server-authoritative: opening the screen happens only on the
                 // logical server. Returning plain SUCCESS would make the client
                 // also predict the use, desyncing the player (drift / "underwater"
                 // movement). SUCCESS_SERVER keeps the action server-side only.
-                return ActionResult.SUCCESS_SERVER;
+                return InteractionResult.SUCCESS_SERVER;
             }
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {

@@ -3,8 +3,8 @@ package com.assistantbot.task;
 import com.assistantbot.bot.AssistantBot;
 import com.assistantbot.util.LookHelper;
 import com.assistantbot.util.NavigationHelper;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Follow the bot's owner. Walks toward them when beyond FOLLOW_DISTANCE,
@@ -16,13 +16,13 @@ public class FollowTask implements BotTask {
 
     @Override
     public TickResult tick(AssistantBot bot) {
-        ServerPlayerEntity owner = bot.getOwnerPlayer();
+        ServerPlayer owner = bot.getOwnerPlayer();
         if (owner == null) {
             return TickResult.FAILED;
         }
 
-        Vec3d botPos = bot.getPos();
-        Vec3d ownerPos = owner.getEntityPos();
+        Vec3 botPos = bot.getPos();
+        Vec3 ownerPos = owner.position();
         double distance = botPos.distanceTo(ownerPos);
 
         if (distance > TOO_FAR_DISTANCE) {
@@ -35,11 +35,11 @@ public class FollowTask implements BotTask {
         if (distance <= FOLLOW_DISTANCE) {
             NavigationHelper.stopMoving(bot);
             bot.getPathfinder().clearPath();
-            LookHelper.lookAt(bot.getFakePlayer(), ownerPos.add(0, owner.getStandingEyeHeight(), 0));
+            LookHelper.lookAt(bot.getFakePlayer(), ownerPos.add(0, owner.getEyeHeight(), 0));
             return TickResult.CONTINUE;
         }
 
-        LookHelper.lookAt(bot.getFakePlayer(), ownerPos.add(0, owner.getStandingEyeHeight(), 0));
+        LookHelper.lookAt(bot.getFakePlayer(), ownerPos.add(0, owner.getEyeHeight(), 0));
         NavigationHelper.navigateTo(bot, ownerPos, NavigationHelper.WALK_SPEED);
         return TickResult.CONTINUE;
     }

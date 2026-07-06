@@ -6,11 +6,10 @@ import com.assistantbot.llm.BuildPlanRegistry;
 import com.assistantbot.llm.BuildStructure;
 import com.assistantbot.llm.BuildStructure.BlockEntry;
 import com.assistantbot.llm.LlmClient;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 
 /**
  * Plan phase of the build pipeline: requests a structure from the LLM,
@@ -26,7 +25,7 @@ public class PlanTask implements BotTask {
     private static final int LLM_WAIT_LOG_INTERVAL = 24;
 
     private final String description;
-    private final ServerPlayerEntity commandSource;
+    private final ServerPlayer commandSource;
     private final String creatorName;
 
     private PlanPhase phase;
@@ -44,7 +43,7 @@ public class PlanTask implements BotTask {
     private int lastPlanId = -1;
     private boolean autoExecute = false;
 
-    public PlanTask(String description, ServerPlayerEntity commandSource) {
+    public PlanTask(String description, ServerPlayer commandSource) {
         this.description = description;
         this.commandSource = commandSource;
         this.creatorName = commandSource.getName().getString();
@@ -158,8 +157,8 @@ public class PlanTask implements BotTask {
     // --- Helpers ---
 
     private void sendMessage(String message) {
-        if (commandSource != null && !commandSource.isDisconnected()) {
-            commandSource.sendMessage(Text.literal(message));
+        if (commandSource != null && !commandSource.hasDisconnected()) {
+            commandSource.sendSystemMessage(Component.literal(message));
         }
     }
 
