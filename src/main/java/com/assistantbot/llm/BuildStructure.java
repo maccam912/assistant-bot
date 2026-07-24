@@ -441,18 +441,48 @@ public class BuildStructure {
         return new int[]{x, y, z};
     }
 
-    // --- BFS sort for realistic placement order ---
+    // --- Build-order sort ---
 
     /**
-     * Sort blocks so each one is placed only when it has a face-adjacent
-     * neighbor that's already placed (or is on the ground, y=0).
+     * Sort structural blocks so each one is placed only when it has a
+     * face-adjacent neighbor that's already placed (or is on the ground,
+     * y=0), then append support-, connection-, or orientation-sensitive
+     * finishing blocks.
      *
-     * This gives the visual appearance of building with structural support:
-     * ground layer first, then blocks connected to already-placed blocks.
-     * Orphan blocks (floating, no path to ground) are appended at the end
-     * sorted by Y ascending.
+     * Deferring windows, doors, fences, and similar details prevents them
+     * from being temporarily unsupported or having later structural layers
+     * overwrite/update them into an invalid shape. Standard doors are placed
+     * last of all, ordered bottom-to-top within each column so their two
+     * halves are installed together.
      */
     public static List<BlockEntry> sortBlocksBFS(List<BlockEntry> blocks) {
+        List<BlockEntry> structural = new ArrayList<>();
+        List<BlockEntry> finishing = new ArrayList<>();
+        List<BlockEntry> doors = new ArrayList<>();
+
+        for (BlockEntry entry : blocks) {
+            if (isStandardDoor(entry.blockId())) {
+                doors.add(entry);
+            } else if (isFinishingBlock(entry.blockId())) {
+                finishing.add(entry);
+            } else {
+                structural.add(entry);
+            }
+        }
+
+        List<BlockEntry> sorted = sortConnectedBlocksBFS(structural);
+        finishing.sort(Comparator.comparingInt(BlockEntry::y)
+                .thenComparingInt(BlockEntry::x)
+                .thenComparingInt(BlockEntry::z));
+        doors.sort(Comparator.comparingInt(BlockEntry::x)
+                .thenComparingInt(BlockEntry::z)
+                .thenComparingInt(BlockEntry::y));
+        sorted.addAll(finishing);
+        sorted.addAll(doors);
+        return sorted;
+    }
+
+    private static List<BlockEntry> sortConnectedBlocksBFS(List<BlockEntry> blocks) {
         Map<Long, BlockEntry> posMap = new HashMap<>();
         for (BlockEntry entry : blocks) {
             posMap.put(packPos(entry.x(), entry.y(), entry.z()), entry);
@@ -502,5 +532,50 @@ public class BuildStructure {
         sorted.addAll(orphans);
 
         return sorted;
+    }
+
+    private static boolean isStandardDoor(String blockId) {
+        String path = blockPath(blockId);
+        return path.endsWith("_door") && !path.endsWith("_trapdoor");
+    }
+
+    private static boolean isFinishingBlock(String blockId) {
+        String path = blockPath(blockId);
+        return path.contains("glass")
+                || path.endsWith("_trapdoor")
+                || path.endsWith("_fence")
+                || path.endsWith("_fence_gate")
+                || path.endsWith("_wall")
+                || path.endsWith("_stairs")
+                || path.endsWith("_slab")
+                || path.endsWith("_button")
+                || path.endsWith("_pressure_plate")
+                || path.endsWith("_sign")
+                || path.endsWith("_hanging_sign")
+                || path.endsWith("_banner")
+                || path.endsWith("_wall_banner")
+                || path.endsWith("_torch")
+                || path.endsWith("_wall_torch")
+                || path.endsWith("_bed")
+                || path.endsWith("_rail")
+                || path.equals("iron_bars")
+                || path.equals("chain")
+                || path.equals("ladder")
+                || path.equals("lever")
+                || path.equals("lantern")
+                || path.equals("soul_lantern");
+    }
+
+    private static String blockPath(String blockId) {
+        String baseId = blockId;
+        int stateStart = baseId.indexOf('[');
+        if (stateStart >= 0) {
+            baseId = baseId.substring(0, stateStart);
+        }
+        int namespaceSeparator = baseId.indexOf(':');
+        if (namespaceSeparator >= 0) {
+            baseId = baseId.substring(namespaceSeparator + 1);
+        }
+        return baseId.trim().toLowerCase(Locale.ROOT);
     }
 }

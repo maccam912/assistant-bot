@@ -3,6 +3,7 @@ package com.assistantbot.task;
 import com.assistantbot.AssistantMod;
 import com.assistantbot.bot.AssistantBot;
 import com.assistantbot.llm.BlockIdResolver;
+import com.assistantbot.llm.BlockStateResolver;
 import com.assistantbot.llm.BuildPlan;
 import com.assistantbot.llm.BuildPlanRegistry;
 import com.assistantbot.llm.BuildStructure.BlockEntry;
@@ -26,14 +27,14 @@ import net.minecraft.world.phys.Vec3;
  * BuildPlanRegistry, waits 5 seconds, clears the build area, then
  * places blocks one per tick.
  *
- * Phases: WAITING -> CLEARING -> PLACING -> DONE
+ * Phases: WAITING -> CLEARING -> PLACING -> FINALIZING -> DONE
  *
  * The origin (bot's position at execute time) localizes the plan
  * so the same plan can be stamped at different locations.
  */
 public class BuildTask implements BotTask {
 
-    private enum BuildPhase { WAITING, CLEARING, PLACING, DONE }
+    private enum BuildPhase { WAITING, CLEARING, PLACING, FINALIZING, DONE }
 
     private static final int MAX_RETRIES_PER_BLOCK = 3;
     private static final int WAIT_TICKS = 20; // 20 task-ticks * 5 game ticks = 100 game ticks = 5 seconds
@@ -59,6 +60,7 @@ public class BuildTask implements BotTask {
     private List<Integer> retryQueue;
     private int totalPlaced;
     private int totalSkipped;
+    private int finalizeBlockIndex;
 
     // Clearing state
     private BlockPos clearMin;
@@ -111,6 +113,7 @@ public class BuildTask implements BotTask {
             case WAITING -> tickWaiting(bot);
             case CLEARING -> tickClearing(bot);
             case PLACING -> tickPlacing(bot);
+            case FINALIZING -> tickFinalizing(bot);
             case DONE -> TickResult.COMPLETE;
         };
     }
@@ -189,15 +192,8 @@ public class BuildTask implements BotTask {
                 if (!retryQueue.isEmpty()) {
                     return tickRetryQueue(bot);
                 }
-                NavigationHelper.stopMoving(bot);
-                bot.getPathfinder().clearPath();
-                phase = BuildPhase.DONE;
-                AssistantMod.LOGGER.info("Build complete: {} placed, {} skipped (plan #{})",
-                        totalPlaced, totalSkipped, planId);
-                sendMessage(bot, "§a[Assistant] Build complete! " + totalPlaced + " blocks placed"
-                        + (totalSkipped > 0 ? " (" + totalSkipped + " skipped)" : "")
-                        + " — plan #" + planId);
-                return TickResult.COMPLETE;
+                beginFinalizing(bot);
+                return TickResult.CONTINUE;
             }
 
             BlockEntry entry = sortedBlocks.get(currentBlockIndex);
@@ -225,10 +221,8 @@ public class BuildTask implements BotTask {
 
     private TickResult tickRetryQueue(AssistantBot bot) {
         if (retryQueue.isEmpty()) {
-            NavigationHelper.stopMoving(bot);
-            bot.getPathfinder().clearPath();
-            phase = BuildPhase.DONE;
-            return TickResult.COMPLETE;
+            beginFinalizing(bot);
+            return TickResult.CONTINUE;
         }
 
         int blockIdx = retryQueue.remove(0);
@@ -249,6 +243,47 @@ public class BuildTask implements BotTask {
             }
         }
 
+        return TickResult.CONTINUE;
+    }
+
+    private void beginFinalizing(AssistantBot bot) {
+        NavigationHelper.stopMoving(bot);
+        bot.getPathfinder().clearPath();
+        finalizeBlockIndex = 0;
+        phase = BuildPhase.FINALIZING;
+    }
+
+    /**
+     * Reconcile neighbor-derived states against the completed build. Direct
+     * server placement starts panes/fences/walls from their default state;
+     * this pass gives every block a completed set of neighbors from which to
+     * derive connections, stair corners, and other contextual shapes.
+     */
+    private TickResult tickFinalizing(AssistantBot bot) {
+        ServerLevel world = bot.getWorld();
+        for (int i = 0; i < BLOCKS_PER_TASK_TICK; i++) {
+            if (finalizeBlockIndex >= sortedBlocks.size()) {
+                phase = BuildPhase.DONE;
+                AssistantMod.LOGGER.info("Build complete: {} placed, {} skipped (plan #{})",
+                        totalPlaced, totalSkipped, planId);
+                sendMessage(bot, "§a[Assistant] Build complete! " + totalPlaced + " blocks placed"
+                        + (totalSkipped > 0 ? " (" + totalSkipped + " skipped)" : "")
+                        + " — plan #" + planId);
+                return TickResult.COMPLETE;
+            }
+
+            BlockEntry entry = sortedBlocks.get(finalizeBlockIndex++);
+            BlockPos worldPos = originPos.offset(new Vec3i(entry.x(), entry.y(), entry.z()));
+            BlockState current = world.getBlockState(worldPos);
+            if (current.isAir()) {
+                continue;
+            }
+
+            BlockState reconciled = Block.updateFromNeighbourShapes(current, world, worldPos);
+            if (!reconciled.equals(current)) {
+                world.setBlock(worldPos, reconciled, Block.UPDATE_ALL);
+            }
+        }
         return TickResult.CONTINUE;
     }
 
@@ -330,7 +365,13 @@ public class BuildTask implements BotTask {
             return false;
         }
 
-        BlockState state = block.defaultBlockState();
+        BlockState state;
+        try {
+            state = BlockStateResolver.resolve(block, blockId);
+        } catch (IllegalArgumentException e) {
+            AssistantMod.LOGGER.warn("Invalid block state '{}': {}", blockId, e.getMessage());
+            return false;
+        }
         boolean success = world.setBlock(pos, state, Block.UPDATE_ALL);
 
         if (success) {
@@ -370,6 +411,7 @@ public class BuildTask implements BotTask {
                 int total = sortedBlocks != null ? sortedBlocks.size() : 0;
                 yield "building: " + totalPlaced + "/" + total + " blocks placed (plan #" + planId + ")";
             }
+            case FINALIZING -> "building: finishing connections and orientations (plan #" + planId + ")";
             case DONE -> "building: complete (" + totalPlaced + " placed, " + totalSkipped + " skipped)";
         };
     }
