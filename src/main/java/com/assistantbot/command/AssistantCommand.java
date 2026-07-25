@@ -112,8 +112,7 @@ public class AssistantCommand {
                 .then(Commands.literal("speed")
                     .executes(AssistantCommand::showBuildSpeed)
                     .then(Commands.argument("blocksPerSecond", DoubleArgumentType.doubleArg(
-                                    BuildRateLimiter.MIN_BLOCKS_PER_SECOND,
-                                    BuildRateLimiter.MAX_BLOCKS_PER_SECOND))
+                                    BuildRateLimiter.MIN_BLOCKS_PER_SECOND))
                         .executes(AssistantCommand::setBuildSpeed)))
                 .then(Commands.literal("plans")
                     .executes(AssistantCommand::listPlans))

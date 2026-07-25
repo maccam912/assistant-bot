@@ -16,6 +16,13 @@ class BuildRateLimiterTest {
     }
 
     @Test
+    void highRateHasNoConfiguredUpperLimit() {
+        BuildRateLimiter limiter = new BuildRateLimiter();
+
+        assertEquals(250_000, limiter.takeBlockBudget(1_000_000.0));
+    }
+
+    @Test
     void slowRateCarriesFractionalCreditAcrossTicks() {
         BuildRateLimiter limiter = new BuildRateLimiter();
 
@@ -48,9 +55,10 @@ class BuildRateLimiterTest {
     @Test
     void validatesBoundsAndFormatsForChat() {
         assertTrue(BuildRateLimiter.isValid(BuildRateLimiter.MIN_BLOCKS_PER_SECOND));
-        assertTrue(BuildRateLimiter.isValid(BuildRateLimiter.MAX_BLOCKS_PER_SECOND));
+        assertTrue(BuildRateLimiter.isValid(1_000_000_000.0));
         assertFalse(BuildRateLimiter.isValid(BuildRateLimiter.MIN_BLOCKS_PER_SECOND - 0.01));
         assertFalse(BuildRateLimiter.isValid(Double.NaN));
+        assertFalse(BuildRateLimiter.isValid(Double.POSITIVE_INFINITY));
         assertEquals("20", BuildRateLimiter.format(20.0));
         assertEquals("0.25", BuildRateLimiter.format(0.25));
     }

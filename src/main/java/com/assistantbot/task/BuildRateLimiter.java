@@ -10,7 +10,6 @@ import java.math.BigDecimal;
 public final class BuildRateLimiter {
     public static final double DEFAULT_BLOCKS_PER_SECOND = 20.0;
     public static final double MIN_BLOCKS_PER_SECOND = 0.25;
-    public static final double MAX_BLOCKS_PER_SECOND = 200.0;
 
     private static final double TASK_TICKS_PER_SECOND = 4.0;
     private static final double ROUNDING_EPSILON = 1.0e-9;
@@ -24,8 +23,8 @@ public final class BuildRateLimiter {
     public int takeBlockBudget(double blocksPerSecond) {
         if (!isValid(blocksPerSecond)) {
             throw new IllegalArgumentException(
-                    "Build speed must be between " + format(MIN_BLOCKS_PER_SECOND)
-                            + " and " + format(MAX_BLOCKS_PER_SECOND) + " blocks per second");
+                    "Build speed must be at least " + format(MIN_BLOCKS_PER_SECOND)
+                            + " blocks per second");
         }
 
         blockCredit += blocksPerSecond / TASK_TICKS_PER_SECOND;
@@ -36,8 +35,7 @@ public final class BuildRateLimiter {
 
     public static boolean isValid(double blocksPerSecond) {
         return Double.isFinite(blocksPerSecond)
-                && blocksPerSecond >= MIN_BLOCKS_PER_SECOND
-                && blocksPerSecond <= MAX_BLOCKS_PER_SECOND;
+                && blocksPerSecond >= MIN_BLOCKS_PER_SECOND;
     }
 
     public static String format(double blocksPerSecond) {

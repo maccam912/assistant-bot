@@ -180,10 +180,8 @@ public class AssistantBot {
     public void setBuildSpeedBlocksPerSecond(double blocksPerSecond) {
         if (!BuildRateLimiter.isValid(blocksPerSecond)) {
             throw new IllegalArgumentException(
-                    "Build speed must be between "
+                    "Build speed must be at least "
                             + BuildRateLimiter.format(BuildRateLimiter.MIN_BLOCKS_PER_SECOND)
-                            + " and "
-                            + BuildRateLimiter.format(BuildRateLimiter.MAX_BLOCKS_PER_SECOND)
                             + " blocks per second");
         }
         buildSpeedBlocksPerSecond = blocksPerSecond;

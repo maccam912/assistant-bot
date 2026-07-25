@@ -37,7 +37,7 @@ Output jar: `build/libs/assistant-bot-<version>.jar`
 | `/assistant deposit` | Deposit inventory into nearest container |
 | `/assistant plan <description>` | Generate a build plan from LLM, returns plan ID |
 | `/assistant execute <id>` | Execute a stored plan at bot's current position |
-| `/assistant speed [blocks-per-second]` | Show or set build speed (0.25–200 blocks/second; default 20); active builds update immediately |
+| `/assistant speed [blocks-per-second]` | Show or set build speed (minimum 0.25, no upper limit; default 20); active builds update immediately |
 | `/assistant plans` | List all available build plans |
 | `/assistant build <description>` | Plan + auto-execute (convenience shortcut) |
 | `/assistant import <url> <description>` | Import a VXB-1 plan from a URL |
