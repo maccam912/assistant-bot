@@ -12,6 +12,7 @@ import com.assistantbot.llm.BuildPlanRegistry;
 import com.assistantbot.llm.BuildStructure;
 import com.assistantbot.task.*;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
@@ -58,6 +59,7 @@ import net.minecraft.server.level.ServerPlayer;
  *   plans                   — list all available build plans
  *   import <url> <desc>    — import a VXB-1 plan from a URL
  *   build <description>    — plan + auto-execute (convenience)
+ *   speed [blocks/sec]     — show or change the active/future build rate
  *   status                  — show current task and position
  */
 public class AssistantCommand {
@@ -107,6 +109,12 @@ public class AssistantCommand {
                 .then(Commands.literal("execute")
                     .then(Commands.argument("id", IntegerArgumentType.integer(1))
                         .executes(AssistantCommand::execute)))
+                .then(Commands.literal("speed")
+                    .executes(AssistantCommand::showBuildSpeed)
+                    .then(Commands.argument("blocksPerSecond", DoubleArgumentType.doubleArg(
+                                    BuildRateLimiter.MIN_BLOCKS_PER_SECOND,
+                                    BuildRateLimiter.MAX_BLOCKS_PER_SECOND))
+                        .executes(AssistantCommand::setBuildSpeed)))
                 .then(Commands.literal("plans")
                     .executes(AssistantCommand::listPlans))
                 .then(Commands.literal("import")
@@ -288,6 +296,32 @@ public class AssistantCommand {
         ctx.getSource().sendSuccess(
                 () -> Component.literal("§a[Assistant] Executing plan #" + planId + " (" + plan.getDescription()
                         + " — " + plan.getBlockCount() + " blocks) at " + origin.toShortString()),
+                false);
+        return 1;
+    }
+
+    private static int showBuildSpeed(CommandContext<CommandSourceStack> ctx) {
+        AssistantBot bot = requireBot(ctx);
+        if (bot == null) return 0;
+
+        String speed = BuildRateLimiter.format(bot.getBuildSpeedBlocksPerSecond());
+        ctx.getSource().sendSuccess(
+                () -> Component.literal("§b[Assistant] Build speed: " + speed
+                        + " blocks/second. Set it with /assistant speed <blocks-per-second>."),
+                false);
+        return 1;
+    }
+
+    private static int setBuildSpeed(CommandContext<CommandSourceStack> ctx) {
+        AssistantBot bot = requireBot(ctx);
+        if (bot == null) return 0;
+
+        double blocksPerSecond = DoubleArgumentType.getDouble(ctx, "blocksPerSecond");
+        bot.setBuildSpeedBlocksPerSecond(blocksPerSecond);
+        String speed = BuildRateLimiter.format(blocksPerSecond);
+        ctx.getSource().sendSuccess(
+                () -> Component.literal("§a[Assistant] Build speed set to " + speed
+                        + " blocks/second. Active and future builds use the new rate."),
                 false);
         return 1;
     }

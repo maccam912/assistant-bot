@@ -25,7 +25,7 @@ import net.minecraft.world.phys.Vec3;
 /**
  * Execute phase of the build pipeline: looks up a stored plan from
  * BuildPlanRegistry, waits 5 seconds, clears the build area, then
- * places blocks one per tick.
+ * places blocks at the bot's configured blocks-per-second rate.
  *
  * Phases: WAITING -> CLEARING -> PLACING -> FINALIZING -> DONE
  *
@@ -38,7 +38,6 @@ public class BuildTask implements BotTask {
 
     private static final int MAX_RETRIES_PER_BLOCK = 3;
     private static final int WAIT_TICKS = 20; // 20 task-ticks * 5 game ticks = 100 game ticks = 5 seconds
-    private static final int BLOCKS_PER_TASK_TICK = 5; // 5 blocks * 4 task-ticks/sec = 20 blocks/sec
     private static final double VISUAL_REPOSITION_START_DISTANCE = 2.0;
     private static final double VISUAL_REPOSITION_TELEPORT_DISTANCE = 6.0;
     private static final double VISUAL_SNAP_RADIUS = 1.5;
@@ -61,6 +60,7 @@ public class BuildTask implements BotTask {
     private int totalPlaced;
     private int totalSkipped;
     private int finalizeBlockIndex;
+    private final BuildRateLimiter rateLimiter;
 
     // Clearing state
     private BlockPos clearMin;
@@ -75,6 +75,7 @@ public class BuildTask implements BotTask {
         this.retryCount = new HashMap<>();
         this.retryQueue = new ArrayList<>();
         this.waitTicksRemaining = WAIT_TICKS;
+        this.rateLimiter = new BuildRateLimiter();
     }
 
     @Override
@@ -94,7 +95,8 @@ public class BuildTask implements BotTask {
         AssistantMod.LOGGER.info("BuildTask starting: plan #{} \"{}\" ({} blocks) at {}",
                 planId, plan.getDescription(), sortedBlocks.size(), originPos);
         sendMessage(bot, "§a[Assistant] Building plan #" + planId + " in 5 seconds... ("
-                + plan.getDescription() + " — " + sortedBlocks.size() + " blocks)");
+                + plan.getDescription() + " — " + sortedBlocks.size() + " blocks at "
+                + BuildRateLimiter.format(bot.getBuildSpeedBlocksPerSecond()) + " blocks/s)");
     }
 
     @Override
@@ -187,44 +189,48 @@ public class BuildTask implements BotTask {
     // --- Phase: PLACING ---
 
     private TickResult tickPlacing(AssistantBot bot) {
-        for (int i = 0; i < BLOCKS_PER_TASK_TICK; i++) {
-            if (currentBlockIndex >= sortedBlocks.size()) {
-                if (!retryQueue.isEmpty()) {
-                    return tickRetryQueue(bot);
-                }
-                beginFinalizing(bot);
-                return TickResult.CONTINUE;
-            }
-
-            BlockEntry entry = sortedBlocks.get(currentBlockIndex);
-            BlockPos worldPos = originPos.offset(new Vec3i(entry.x(), entry.y(), entry.z()));
-            boolean placed = attemptPlacementThisTick(bot, entry);
-
-            if (placed) {
-                totalPlaced++;
-            } else {
-                int retries = retryCount.getOrDefault(currentBlockIndex, 0);
-                if (retries < MAX_RETRIES_PER_BLOCK) {
-                    retryCount.put(currentBlockIndex, retries + 1);
-                    retryQueue.add(currentBlockIndex);
-                } else {
-                    totalSkipped++;
-                    AssistantMod.LOGGER.warn("Skipping block at {} after {} retries",
-                            worldPos, MAX_RETRIES_PER_BLOCK);
-                }
-            }
-
-            currentBlockIndex++;
-        }
-        return TickResult.CONTINUE;
-    }
-
-    private TickResult tickRetryQueue(AssistantBot bot) {
-        if (retryQueue.isEmpty()) {
+        if (currentBlockIndex >= sortedBlocks.size() && retryQueue.isEmpty()) {
             beginFinalizing(bot);
             return TickResult.CONTINUE;
         }
 
+        int blockBudget = rateLimiter.takeBlockBudget(bot.getBuildSpeedBlocksPerSecond());
+        for (int i = 0; i < blockBudget; i++) {
+            if (currentBlockIndex < sortedBlocks.size()) {
+                attemptNextBlock(bot);
+            } else if (!retryQueue.isEmpty()) {
+                attemptNextRetry(bot);
+            } else {
+                beginFinalizing(bot);
+                return TickResult.CONTINUE;
+            }
+        }
+        return TickResult.CONTINUE;
+    }
+
+    private void attemptNextBlock(AssistantBot bot) {
+        BlockEntry entry = sortedBlocks.get(currentBlockIndex);
+        BlockPos worldPos = originPos.offset(new Vec3i(entry.x(), entry.y(), entry.z()));
+        boolean placed = attemptPlacementThisTick(bot, entry);
+
+        if (placed) {
+            totalPlaced++;
+        } else {
+            int retries = retryCount.getOrDefault(currentBlockIndex, 0);
+            if (retries < MAX_RETRIES_PER_BLOCK) {
+                retryCount.put(currentBlockIndex, retries + 1);
+                retryQueue.add(currentBlockIndex);
+            } else {
+                totalSkipped++;
+                AssistantMod.LOGGER.warn("Skipping block at {} after {} retries",
+                        worldPos, MAX_RETRIES_PER_BLOCK);
+            }
+        }
+
+        currentBlockIndex++;
+    }
+
+    private void attemptNextRetry(AssistantBot bot) {
         int blockIdx = retryQueue.remove(0);
         BlockEntry entry = sortedBlocks.get(blockIdx);
         BlockPos worldPos = originPos.offset(new Vec3i(entry.x(), entry.y(), entry.z()));
@@ -242,8 +248,6 @@ public class BuildTask implements BotTask {
                 AssistantMod.LOGGER.warn("Permanently skipping block at {}", worldPos);
             }
         }
-
-        return TickResult.CONTINUE;
     }
 
     private void beginFinalizing(AssistantBot bot) {
@@ -261,7 +265,8 @@ public class BuildTask implements BotTask {
      */
     private TickResult tickFinalizing(AssistantBot bot) {
         ServerLevel world = bot.getWorld();
-        for (int i = 0; i < BLOCKS_PER_TASK_TICK; i++) {
+        int blockBudget = rateLimiter.takeBlockBudget(bot.getBuildSpeedBlocksPerSecond());
+        for (int i = 0; i < blockBudget; i++) {
             if (finalizeBlockIndex >= sortedBlocks.size()) {
                 phase = BuildPhase.DONE;
                 AssistantMod.LOGGER.info("Build complete: {} placed, {} skipped (plan #{})",

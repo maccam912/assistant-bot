@@ -3,6 +3,7 @@ package com.assistantbot.bot;
 import com.assistantbot.AssistantMod;
 import com.assistantbot.nav.BotPathfinder;
 import com.assistantbot.task.BotTask;
+import com.assistantbot.task.BuildRateLimiter;
 import com.assistantbot.task.BuildTask;
 import com.assistantbot.task.CombatTask;
 import com.assistantbot.task.IdleTask;
@@ -37,6 +38,7 @@ public class AssistantBot {
     private float lastKnownHealth;
     private float lastKnownOwnerHealth;
     private BotPathfinder pathfinder;
+    private double buildSpeedBlocksPerSecond = BuildRateLimiter.DEFAULT_BLOCKS_PER_SECOND;
 
     private static final int DOWNED_DURATION_TICKS = 2400; // 2 minutes at 20 TPS
     private static final double DOWNED_SPEED_MULTIPLIER = 0.25;
@@ -170,6 +172,27 @@ public class AssistantBot {
         return 1.0;
     }
 
+    /**
+     * Sets the placement/finalization rate used by both active and future
+     * builds. BuildTask reads this value every task tick, so changes take
+     * effect without restarting the task.
+     */
+    public void setBuildSpeedBlocksPerSecond(double blocksPerSecond) {
+        if (!BuildRateLimiter.isValid(blocksPerSecond)) {
+            throw new IllegalArgumentException(
+                    "Build speed must be between "
+                            + BuildRateLimiter.format(BuildRateLimiter.MIN_BLOCKS_PER_SECOND)
+                            + " and "
+                            + BuildRateLimiter.format(BuildRateLimiter.MAX_BLOCKS_PER_SECOND)
+                            + " blocks per second");
+        }
+        buildSpeedBlocksPerSecond = blocksPerSecond;
+    }
+
+    public double getBuildSpeedBlocksPerSecond() {
+        return buildSpeedBlocksPerSecond;
+    }
+
     private void onLethalDamage() {
         // Already downed — don't spam the log
         if (downedUntilTick >= 0) return;
@@ -227,6 +250,9 @@ public class AssistantBot {
 
     public String getStatusString() {
         String taskStatus = currentTask.getStatusString();
+        if (currentTask instanceof BuildTask) {
+            taskStatus += " @ " + BuildRateLimiter.format(buildSpeedBlocksPerSecond) + " blocks/s";
+        }
         if (downedUntilTick >= 0) {
             long currentTick = world.getServer().getTickCount();
             if (currentTick < downedUntilTick) {
