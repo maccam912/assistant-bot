@@ -19,19 +19,51 @@ public class BuildStructure {
      */
     public record BlockEntry(int x, int y, int z, String blockId) {}
 
+    public record Cell(int x, int y, int z) {}
+
+    /** One placement operation. Atomic groups are installed before neighbor updates run. */
+    public record PlacementGroup(String id, String kind, List<BlockEntry> blocks,
+                                 List<Cell> requiredSupports, boolean atomic) {
+        public PlacementGroup {
+            blocks = List.copyOf(blocks);
+            requiredSupports = List.copyOf(requiredSupports);
+        }
+    }
+
     private final List<BlockEntry> blocks;
     private final Map<String, Integer> materials;
+    private final List<PlacementGroup> featureGroups;
+    private final int sizeX;
+    private final int sizeY;
+    private final int sizeZ;
+    private final boolean allowFloating;
     private VxbDiagnostics.DiagnosticResult diagnostics;
 
     public BuildStructure(List<BlockEntry> blocks, Map<String, Integer> materials) {
+        this(blocks, materials, List.of(), -1, -1, -1, false);
+    }
+
+    public BuildStructure(List<BlockEntry> blocks, Map<String, Integer> materials,
+                          List<PlacementGroup> featureGroups, int sizeX, int sizeY, int sizeZ,
+                          boolean allowFloating) {
         this.blocks = blocks;
         this.materials = materials;
+        this.featureGroups = List.copyOf(featureGroups);
+        this.sizeX = sizeX;
+        this.sizeY = sizeY;
+        this.sizeZ = sizeZ;
+        this.allowFloating = allowFloating;
         this.diagnostics = new VxbDiagnostics.DiagnosticResult();
     }
 
     public List<BlockEntry> getBlocks() { return blocks; }
     public Map<String, Integer> getMaterials() { return materials; }
     public VxbDiagnostics.DiagnosticResult getDiagnostics() { return diagnostics; }
+    public List<PlacementGroup> getFeatureGroups() { return featureGroups; }
+    public int getSizeX() { return sizeX; }
+    public int getSizeY() { return sizeY; }
+    public int getSizeZ() { return sizeZ; }
+    public boolean isFloatingAllowed() { return allowFloating; }
     public void setDiagnostics(VxbDiagnostics.DiagnosticResult diagnostics) { this.diagnostics = diagnostics; }
 
     /**
@@ -94,6 +126,8 @@ public class BuildStructure {
      * @throws IllegalArgumentException if the format is invalid
      */
     public static BuildStructure parse(String vxb) {
+        VxbFeatureCompiler.Expansion expansion = VxbFeatureCompiler.expand(vxb);
+        vxb = expansion.vxb();
         // Strip markdown code fences if the LLM wrapped the output
         String cleaned = stripCodeFences(vxb).trim();
 
@@ -341,7 +375,8 @@ public class BuildStructure {
             throw new IllegalArgumentException("VXB-1 parsed successfully but produced no blocks");
         }
 
-        return new BuildStructure(blocks, materials);
+        return new BuildStructure(blocks, materials, expansion.groups(), sizeX, sizeY, sizeZ,
+                expansion.allowFloating());
     }
 
     /**
@@ -480,6 +515,93 @@ public class BuildStructure {
         sorted.addAll(finishing);
         sorted.addAll(doors);
         return sorted;
+    }
+
+    /**
+     * Compile flattened voxels into executable operations while preserving semantic fixtures.
+     * Ordinary VXB-1 doors are also paired so legacy imports gain atomic placement.
+     */
+    public static List<PlacementGroup> planPlacementGroups(BuildStructure structure) {
+        Set<Long> semanticCells = new HashSet<>();
+        for (PlacementGroup group : structure.featureGroups) {
+            for (BlockEntry block : group.blocks()) semanticCells.add(packPos(block.x(), block.y(), block.z()));
+        }
+
+        List<BlockEntry> ordinary = new ArrayList<>();
+        List<BlockEntry> legacyDoors = new ArrayList<>();
+        for (BlockEntry block : structure.blocks) {
+            if (semanticCells.contains(packPos(block.x(), block.y(), block.z()))) continue;
+            if (isStandardDoor(block.blockId())) legacyDoors.add(block);
+            else ordinary.add(block);
+        }
+
+        List<PlacementGroup> operations = new ArrayList<>();
+        int opIndex = 0;
+        for (BlockEntry block : sortBlocksBFS(ordinary)) {
+            operations.add(new PlacementGroup("c" + (++opIndex), "block", List.of(block), List.of(), false));
+        }
+
+        Map<String, List<BlockEntry>> doorsByColumn = new TreeMap<>();
+        for (BlockEntry door : legacyDoors) {
+            String key = door.x() + "," + door.z();
+            doorsByColumn.computeIfAbsent(key, ignored -> new ArrayList<>()).add(door);
+        }
+        for (List<BlockEntry> door : doorsByColumn.values()) {
+            door.sort(Comparator.comparingInt(BlockEntry::y));
+            int minY = door.getFirst().y();
+            operations.add(new PlacementGroup("d" + (++opIndex), "door", door,
+                    List.of(new Cell(door.getFirst().x(), minY - 1, door.getFirst().z())), door.size() > 1));
+        }
+
+        operations.addAll(sortSemanticDependencies(structure.featureGroups));
+        return List.copyOf(operations);
+    }
+
+    private static List<PlacementGroup> sortSemanticDependencies(List<PlacementGroup> groups) {
+        Comparator<PlacementGroup> order = Comparator.comparingInt(BuildStructure::minimumGroupY)
+                .thenComparing(PlacementGroup::id);
+        Map<Cell, PlacementGroup> ownerByCell = new HashMap<>();
+        for (PlacementGroup group : groups) {
+            for (BlockEntry block : group.blocks()) ownerByCell.put(new Cell(block.x(), block.y(), block.z()), group);
+        }
+        Map<PlacementGroup, Set<PlacementGroup>> outgoing = new HashMap<>();
+        Map<PlacementGroup, Integer> indegree = new HashMap<>();
+        for (PlacementGroup group : groups) indegree.put(group, 0);
+        for (PlacementGroup dependent : groups) {
+            Set<PlacementGroup> dependencies = new HashSet<>();
+            for (Cell support : dependent.requiredSupports()) {
+                PlacementGroup owner = ownerByCell.get(support);
+                if (owner != null && owner != dependent) dependencies.add(owner);
+            }
+            for (PlacementGroup dependency : dependencies) {
+                outgoing.computeIfAbsent(dependency, ignored -> new HashSet<>()).add(dependent);
+                indegree.merge(dependent, 1, Integer::sum);
+            }
+        }
+        Queue<PlacementGroup> ready = new PriorityQueue<>(order);
+        for (PlacementGroup group : groups) if (indegree.get(group) == 0) ready.add(group);
+        List<PlacementGroup> sorted = new ArrayList<>();
+        while (!ready.isEmpty()) {
+            PlacementGroup group = ready.remove();
+            sorted.add(group);
+            for (PlacementGroup dependent : outgoing.getOrDefault(group, Set.of())) {
+                int remaining = indegree.merge(dependent, -1, Integer::sum);
+                if (remaining == 0) ready.add(dependent);
+            }
+        }
+        if (sorted.size() != groups.size()) {
+            List<PlacementGroup> cyclic = new ArrayList<>(groups);
+            cyclic.removeAll(sorted);
+            cyclic.sort(order);
+            sorted.addAll(cyclic);
+        }
+        return sorted;
+    }
+
+    private static int minimumGroupY(PlacementGroup group) {
+        int result = Integer.MAX_VALUE;
+        for (BlockEntry block : group.blocks()) result = Math.min(result, block.y());
+        return result;
     }
 
     private static List<BlockEntry> sortConnectedBlocksBFS(List<BlockEntry> blocks) {

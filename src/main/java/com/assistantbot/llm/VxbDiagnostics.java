@@ -92,6 +92,16 @@ public class VxbDiagnostics {
      * Run the comprehensive multi-phase diagnostics on a VXB-1 text.
      */
     public static DiagnosticResult run(String vxb) {
+        try {
+            return runExpanded(VxbFeatureCompiler.expand(vxb).vxb());
+        } catch (IllegalArgumentException e) {
+            DiagnosticResult result = new DiagnosticResult();
+            result.add(Severity.BLOCKER, "VXB-1.1 Semantic Compiler", e.getMessage(), null);
+            return result;
+        }
+    }
+
+    private static DiagnosticResult runExpanded(String vxb) {
         DiagnosticResult result = new DiagnosticResult();
 
         // 1. Preprocess & normalize
@@ -187,9 +197,11 @@ public class VxbDiagnostics {
                 } else {
                     inLayer = false;
                     // Layer Row-Count Depth Assert
-                    if (hasBounds && currentLayerRow != sizeZ) {
+                    int expectedRows = hasBounds ? sizeZ - layerZ0 : currentLayerRow;
+                    if (hasBounds && currentLayerRow != expectedRows) {
                         result.add(Severity.BLOCKER, "Layer Row-Count Depth Assert",
-                                "Layer depth mismatch: parsed " + currentLayerRow + " rows, but size specifies exactly " + sizeZ + " rows.",
+                                "Layer depth mismatch: parsed " + currentLayerRow + " rows, but z=" + layerZ0
+                                        + " requires exactly " + expectedRows + " rows through the declared depth.",
                                 layerStartLineNum);
                     }
                 }

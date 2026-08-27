@@ -7,6 +7,7 @@ import com.assistantbot.llm.BlockStateResolver;
 import com.assistantbot.llm.BuildPlan;
 import com.assistantbot.llm.BuildPlanRegistry;
 import com.assistantbot.llm.BuildStructure.BlockEntry;
+import com.assistantbot.llm.BuildStructure.PlacementGroup;
 import com.assistantbot.util.LookHelper;
 import com.assistantbot.util.NavigationHelper;
 import java.util.*;
@@ -54,7 +55,8 @@ public class BuildTask implements BotTask {
 
     // Placement state
     private List<BlockEntry> sortedBlocks;
-    private int currentBlockIndex;
+    private List<PlacementGroup> placementGroups;
+    private int currentOperationIndex;
     private Map<Integer, Integer> retryCount;
     private List<Integer> retryQueue;
     private int totalPlaced;
@@ -88,7 +90,8 @@ public class BuildTask implements BotTask {
         }
 
         sortedBlocks = plan.getSortedBlocks();
-        currentBlockIndex = 0;
+        placementGroups = plan.getPlacementGroups();
+        currentOperationIndex = 0;
         totalPlaced = 0;
         totalSkipped = 0;
 
@@ -189,15 +192,15 @@ public class BuildTask implements BotTask {
     // --- Phase: PLACING ---
 
     private TickResult tickPlacing(AssistantBot bot) {
-        if (currentBlockIndex >= sortedBlocks.size() && retryQueue.isEmpty()) {
+        if (currentOperationIndex >= placementGroups.size() && retryQueue.isEmpty()) {
             beginFinalizing(bot);
             return TickResult.CONTINUE;
         }
 
         int blockBudget = rateLimiter.takeBlockBudget(bot.getBuildSpeedBlocksPerSecond());
         for (int i = 0; i < blockBudget; i++) {
-            if (currentBlockIndex < sortedBlocks.size()) {
-                attemptNextBlock(bot);
+            if (currentOperationIndex < placementGroups.size()) {
+                attemptNextOperation(bot);
             } else if (!retryQueue.isEmpty()) {
                 attemptNextRetry(bot);
             } else {
@@ -208,44 +211,46 @@ public class BuildTask implements BotTask {
         return TickResult.CONTINUE;
     }
 
-    private void attemptNextBlock(AssistantBot bot) {
-        BlockEntry entry = sortedBlocks.get(currentBlockIndex);
-        BlockPos worldPos = originPos.offset(new Vec3i(entry.x(), entry.y(), entry.z()));
-        boolean placed = attemptPlacementThisTick(bot, entry);
+    private void attemptNextOperation(AssistantBot bot) {
+        PlacementGroup group = placementGroups.get(currentOperationIndex);
+        BlockEntry first = group.blocks().getFirst();
+        BlockPos worldPos = originPos.offset(new Vec3i(first.x(), first.y(), first.z()));
+        boolean placed = attemptPlacementGroupThisTick(bot, group);
 
         if (placed) {
-            totalPlaced++;
+            totalPlaced += group.blocks().size();
         } else {
-            int retries = retryCount.getOrDefault(currentBlockIndex, 0);
+            int retries = retryCount.getOrDefault(currentOperationIndex, 0);
             if (retries < MAX_RETRIES_PER_BLOCK) {
-                retryCount.put(currentBlockIndex, retries + 1);
-                retryQueue.add(currentBlockIndex);
+                retryCount.put(currentOperationIndex, retries + 1);
+                retryQueue.add(currentOperationIndex);
             } else {
-                totalSkipped++;
-                AssistantMod.LOGGER.warn("Skipping block at {} after {} retries",
-                        worldPos, MAX_RETRIES_PER_BLOCK);
+                totalSkipped += group.blocks().size();
+                AssistantMod.LOGGER.warn("Skipping placement group {} at {} after {} retries",
+                        group.id(), worldPos, MAX_RETRIES_PER_BLOCK);
             }
         }
 
-        currentBlockIndex++;
+        currentOperationIndex++;
     }
 
     private void attemptNextRetry(AssistantBot bot) {
         int blockIdx = retryQueue.remove(0);
-        BlockEntry entry = sortedBlocks.get(blockIdx);
-        BlockPos worldPos = originPos.offset(new Vec3i(entry.x(), entry.y(), entry.z()));
-        boolean placed = attemptPlacementThisTick(bot, entry);
+        PlacementGroup group = placementGroups.get(blockIdx);
+        BlockEntry first = group.blocks().getFirst();
+        BlockPos worldPos = originPos.offset(new Vec3i(first.x(), first.y(), first.z()));
+        boolean placed = attemptPlacementGroupThisTick(bot, group);
 
         if (placed) {
-            totalPlaced++;
+            totalPlaced += group.blocks().size();
         } else {
             int retries = retryCount.getOrDefault(blockIdx, 0);
             if (retries < MAX_RETRIES_PER_BLOCK) {
                 retryCount.put(blockIdx, retries + 1);
                 retryQueue.add(blockIdx);
             } else {
-                totalSkipped++;
-                AssistantMod.LOGGER.warn("Permanently skipping block at {}", worldPos);
+                totalSkipped += group.blocks().size();
+                AssistantMod.LOGGER.warn("Permanently skipping placement group {} at {}", group.id(), worldPos);
             }
         }
     }
@@ -292,11 +297,8 @@ public class BuildTask implements BotTask {
         return TickResult.CONTINUE;
     }
 
-    private boolean attemptPlacementThisTick(AssistantBot bot, BlockEntry entry) {
-        // Skip air blocks — volume is already cleared, no need to navigate or place
-        if (entry.blockId().equals("minecraft:air") || entry.blockId().equals("air")) {
-            return true;
-        }
+    private boolean attemptPlacementGroupThisTick(AssistantBot bot, PlacementGroup group) {
+        BlockEntry entry = group.blocks().getFirst();
         BlockPos worldPos = originPos.offset(new Vec3i(entry.x(), entry.y(), entry.z()));
         Vec3 targetCenter = Vec3.atCenterOf(worldPos);
         double distance = bot.getPos().distanceTo(targetCenter);
@@ -313,7 +315,41 @@ public class BuildTask implements BotTask {
         }
 
         LookHelper.lookAt(bot.getFakePlayer(), targetCenter);
-        return placeBlockServerEnforced(bot.getWorld(), worldPos, entry.blockId());
+        if (!group.atomic()) {
+            return placeBlockServerEnforced(bot.getWorld(), worldPos, entry.blockId());
+        }
+        return placeAtomicGroup(bot.getWorld(), group);
+    }
+
+    /** Install every member before neighbor updates, so doors and beds cannot destroy half of themselves. */
+    private boolean placeAtomicGroup(ServerLevel world, PlacementGroup group) {
+        List<BlockState> states = new ArrayList<>();
+        List<BlockPos> positions = new ArrayList<>();
+        for (BlockEntry entry : group.blocks()) {
+            Identifier id = Identifier.tryParse(BlockIdResolver.normalizeBaseId(entry.blockId()));
+            if (id == null || !BuiltInRegistries.BLOCK.containsKey(id)) return false;
+            Block block = BuiltInRegistries.BLOCK.getValue(id);
+            try {
+                states.add(BlockStateResolver.resolve(block, entry.blockId()));
+            } catch (IllegalArgumentException e) {
+                AssistantMod.LOGGER.warn("Invalid atomic block state '{}': {}", entry.blockId(), e.getMessage());
+                return false;
+            }
+            positions.add(originPos.offset(new Vec3i(entry.x(), entry.y(), entry.z())));
+        }
+
+        for (int i = 0; i < positions.size(); i++) {
+            if (!world.setBlock(positions.get(i), states.get(i), Block.UPDATE_CLIENTS)) return false;
+        }
+        for (BlockPos pos : positions) {
+            BlockState current = world.getBlockState(pos);
+            BlockState reconciled = Block.updateFromNeighbourShapes(current, world, pos);
+            world.setBlock(pos, reconciled, Block.UPDATE_ALL);
+        }
+        for (int i = 0; i < positions.size(); i++) {
+            if (world.getBlockState(positions.get(i)).getBlock() != states.get(i).getBlock()) return false;
+        }
+        return true;
     }
 
     private void snapCloseToTarget(AssistantBot bot, Vec3 targetCenter) {

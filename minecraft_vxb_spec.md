@@ -1,4 +1,40 @@
-# VXB-1: an LLM-friendly text format for Minecraft voxel builds
+# VXB-1.1: an LLM-friendly, mechanically compiled format for Minecraft voxel builds
+
+VXB-1 remains accepted for imports. VXB-1.1 adds local explicit layers, semantic
+multi-block features, atomic placement groups, support/collision validation, and
+the opt-in `allow_floating` header. The canonical model-facing grammar and example
+live in [`docs/vxb1-prompt.md`](docs/vxb1-prompt.md); the same prompt is packaged as
+`src/main/resources/vxb1-prompt.md` and loaded by the mod at runtime.
+
+## VXB-1.1 additions
+
+```text
+layer y 2-3 x 1 z 0 w 7 d 4
+PPGGGPP
+P.....P
+P.....P
+PPPPPPP
+endlayer
+
+features
+door 4 1 6 spruce outside=south
+bed 2 1 2 red head=east
+stair 4 1 3 spruce up=north
+wall_torch 2 2 1 wall=north
+endfeatures
+```
+
+The compiler expands each feature into exact Minecraft states and retains it as
+one placement group. Multi-cell groups reserve their full footprint and are
+installed before neighbor updates, preventing partially placed doors and beds.
+Semantic directions deliberately avoid exposing the inconsistent raw meanings of
+Minecraft `facing` properties to the model.
+
+The planning API offers `compile_vxb`, `apply_vxb_patch`, `inspect_vxb`, and
+`submit_vxb` function tools. A draft is compiled locally against the active server
+registry; repairs use VXP-1 numbered-line edits instead of rewriting the full file.
+With `OPENROUTER_VISION_REVIEW=true`, `inspect_vxb` also sends a locally rendered
+PNG projection back to vision-capable models; otherwise it remains text-only.
 
 ## Why this shape of format works better than raw 3D dumps
 

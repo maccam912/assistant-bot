@@ -6,7 +6,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 
@@ -19,8 +18,6 @@ import net.minecraft.resources.Identifier;
  * game will actually accept.
  */
 public final class BlockIdResolver {
-    private static final int PROMPT_LINE_LENGTH = 110;
-
     private BlockIdResolver() {
     }
 
@@ -73,28 +70,6 @@ public final class BlockIdResolver {
         return replacements.size();
     }
 
-    public static String buildAllowedBlockListForPrompt() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Authoritative allowed block IDs from this server's Minecraft 26.2 block registry.\n");
-        sb.append("Use ONLY these base block IDs in palette values. For minecraft namespace entries, write the short name without ");
-        sb.append("\"minecraft:\". For non-minecraft namespaces, keep the namespace.\n");
-        sb.append("Optional block state suffixes may only be attached to one of these base IDs.\n\n");
-
-        int lineLength = 0;
-        for (String name : allowedPromptNames()) {
-            String token = lineLength == 0 ? name : ", " + name;
-            if (lineLength > 0 && lineLength + token.length() > PROMPT_LINE_LENGTH) {
-                sb.append('\n');
-                token = name;
-                lineLength = 0;
-            }
-            sb.append(token);
-            lineLength += token.length();
-        }
-
-        return sb.toString();
-    }
-
     public static String normalizeBaseId(String blockId) {
         return ensureNamespace(stripBlockState(blockId).trim().toLowerCase());
     }
@@ -115,18 +90,6 @@ public final class BlockIdResolver {
         List<Identifier> ids = new ArrayList<>(BuiltInRegistries.BLOCK.keySet());
         ids.sort(Comparator.comparing(Identifier::toString));
         return ids;
-    }
-
-    private static List<String> allowedPromptNames() {
-        Set<String> names = new TreeSet<>();
-        for (Identifier id : BuiltInRegistries.BLOCK.keySet()) {
-            if (id.getNamespace().equals("minecraft")) {
-                names.add(id.getPath());
-            } else {
-                names.add(id.toString());
-            }
-        }
-        return new ArrayList<>(names);
     }
 
     private static String comparableName(String fullOrShortId) {

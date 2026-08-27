@@ -5,6 +5,7 @@ import com.assistantbot.bot.AssistantBot;
 import com.assistantbot.llm.BuildPlanRegistry;
 import com.assistantbot.llm.BuildStructure;
 import com.assistantbot.llm.BuildStructure.BlockEntry;
+import com.assistantbot.llm.BuildStructure.PlacementGroup;
 import com.assistantbot.llm.LlmClient;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -38,6 +39,7 @@ public class PlanTask implements BotTask {
 
     // Sorting result
     private List<BlockEntry> sortedBlocks;
+    private List<PlacementGroup> placementGroups;
 
     // Output
     private int lastPlanId = -1;
@@ -129,7 +131,9 @@ public class PlanTask implements BotTask {
 
 
     private TickResult transitionToSorting() {
-        sortedBlocks = BuildStructure.sortBlocksBFS(structure.getBlocks());
+        placementGroups = BuildStructure.planPlacementGroups(structure);
+        sortedBlocks = new ArrayList<>();
+        for (PlacementGroup group : placementGroups) sortedBlocks.addAll(group.blocks());
         phase = PlanPhase.SORTING;
         return TickResult.CONTINUE;
     }
@@ -145,7 +149,7 @@ public class PlanTask implements BotTask {
     // --- Phase: STORING ---
 
     private TickResult tickStoring() {
-        lastPlanId = BuildPlanRegistry.getInstance().store(description, creatorName, sortedBlocks);
+        lastPlanId = BuildPlanRegistry.getInstance().storeGrouped(description, creatorName, placementGroups);
         AssistantMod.LOGGER.info("Plan stored with ID {} ({} blocks, description: \"{}\")",
                 lastPlanId, sortedBlocks.size(), description);
         sendMessage("§a[Assistant] Plan ready! ID: " + lastPlanId + " (" + description

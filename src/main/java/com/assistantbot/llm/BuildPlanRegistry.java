@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import com.assistantbot.llm.BuildStructure.PlacementGroup;
 
 /**
  * Global in-memory registry of build plans. Plans survive for the server's
@@ -36,6 +37,14 @@ public class BuildPlanRegistry {
                      List<BuildStructure.BlockEntry> sortedBlocks) {
         int id = nextId.getAndIncrement();
         BuildPlan plan = new BuildPlan(id, description, creatorName, sortedBlocks);
+        plans.put(id, plan);
+        return id;
+    }
+
+    /** Store placement operations while preserving atomic semantic fixtures. */
+    public int storeGrouped(String description, String creatorName, List<PlacementGroup> groups) {
+        int id = nextId.getAndIncrement();
+        BuildPlan plan = BuildPlan.grouped(id, description, creatorName, groups);
         plans.put(id, plan);
         return id;
     }
