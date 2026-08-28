@@ -33,6 +33,8 @@ public class PlanTask implements BotTask {
     private CompletableFuture<BuildStructure> llmFuture;
     private final LlmClient llmClient;
     private int llmWaitTicks;
+    private volatile LlmClient.Progress llmProgress =
+            new LlmClient.Progress("starting", "waiting for request worker");
 
     // Structure state
     private BuildStructure structure;
@@ -57,7 +59,7 @@ public class PlanTask implements BotTask {
     @Override
     public void onStart(AssistantBot bot) {
         AssistantMod.LOGGER.info("PlanTask starting: \"{}\" (creator: {})", description, creatorName);
-        llmFuture = llmClient.requestStructureAsync(description);
+        llmFuture = llmClient.requestStructureAsync(description, progress -> llmProgress = progress);
     }
 
     @Override
@@ -85,8 +87,8 @@ public class PlanTask implements BotTask {
             llmWaitTicks++;
             if (llmWaitTicks % LLM_WAIT_LOG_INTERVAL == 0) {
                 int waitSeconds = llmWaitTicks * 5 / 20;
-                AssistantMod.LOGGER.info("Still waiting for LLM response... ({}s elapsed, description: \"{}\")",
-                        waitSeconds, description);
+                AssistantMod.LOGGER.info("PlanTask in progress ({}s elapsed) — {} (description: \"{}\")",
+                        waitSeconds, llmProgress.summary(), description);
             }
             return TickResult.CONTINUE;
         }
@@ -177,7 +179,7 @@ public class PlanTask implements BotTask {
         return switch (phase) {
             case REQUESTING -> {
                 int waitSeconds = llmWaitTicks * 5 / 20;
-                yield "planning: waiting for LLM... (" + waitSeconds + "s, " + description + ")";
+                yield "planning: " + llmProgress.summary() + " (" + waitSeconds + "s, " + description + ")";
             }
             case SORTING -> "planning: sorting placement order...";
             case STORING -> "planning: storing plan...";

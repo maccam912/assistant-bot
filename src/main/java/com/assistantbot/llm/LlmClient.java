@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 /**
  * HTTP client for calling an LLM via OpenRouter's OpenAI-compatible API.
@@ -30,6 +31,20 @@ import java.util.concurrent.CompletableFuture;
  *                         (falls back to env var / .env if file not found)
  */
 public class LlmClient {
+
+    /** A human-readable update emitted as an LLM plan moves through generation and repair. */
+    public record Progress(String step, String detail) {
+        public Progress {
+            if (step == null || step.isBlank()) throw new IllegalArgumentException("step must not be blank");
+            detail = detail == null ? "" : detail;
+        }
+
+        public String summary() {
+            return detail.isBlank() ? step : step + ": " + detail;
+        }
+    }
+
+    private static final Consumer<Progress> NO_PROGRESS_LISTENER = ignored -> {};
 
     /** 3 minute timeout — if the LLM hasn't responded by then, the request has failed. */
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(180);
@@ -167,9 +182,19 @@ public class LlmClient {
      * @return CompletableFuture resolving to the parsed structure
      */
     public CompletableFuture<BuildStructure> requestStructureAsync(String description) {
+        return requestStructureAsync(description, NO_PROGRESS_LISTENER);
+    }
+
+    /**
+     * Call the LLM asynchronously and publish coarse progress suitable for status output.
+     * The listener runs on the request worker thread and must return quickly.
+     */
+    public CompletableFuture<BuildStructure> requestStructureAsync(
+            String description, Consumer<Progress> progressListener) {
+        Consumer<Progress> listener = progressListener != null ? progressListener : NO_PROGRESS_LISTENER;
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return requestStructure(description);
+                return requestStructure(description, listener);
             } catch (Exception e) {
                 throw new RuntimeException("LLM request failed: " + e.getMessage(), e);
             }
@@ -178,16 +203,19 @@ public class LlmClient {
 
 
 
-    private BuildStructure requestStructure(String description) throws Exception {
+    private BuildStructure requestStructure(String description, Consumer<Progress> progressListener) throws Exception {
         try {
-            return requestStructureWithTools(description);
+            reportProgress(progressListener, "starting", "preparing tool-assisted generation");
+            return requestStructureWithTools(description, progressListener);
         } catch (ToolUnavailableException e) {
             AssistantMod.LOGGER.warn("Selected model/provider cannot use VXB tools; falling back to text: {}", e.getMessage());
-            return requestStructureWithoutTools(description);
+            reportProgress(progressListener, "falling back", "model/provider does not support VXB tools; using text generation");
+            return requestStructureWithoutTools(description, progressListener);
         }
     }
 
-    private BuildStructure requestStructureWithoutTools(String description) throws Exception {
+    private BuildStructure requestStructureWithoutTools(
+            String description, Consumer<Progress> progressListener) throws Exception {
         String baseUrl = requireEnv("OPENROUTER_BASE_URL");
         String apiKey = requireEnv("OPENROUTER_API_KEY");
         String model = readModel();
@@ -197,9 +225,11 @@ public class LlmClient {
 
         // First attempt
         AssistantMod.LOGGER.info("Requesting structure from LLM for: \"{}\"", description);
+        reportProgress(progressListener, "generating", "waiting for initial text draft");
         String content = callApi(url, apiKey, model, userMessage, null, null);
 
         // Run compiler diagnostics and architectural linter
+        reportProgress(progressListener, "validating", "checking initial text draft");
         VxbDiagnostics.DiagnosticResult firstResult = VxbDiagnostics.run(content);
 
         if (hasNonMechanicalBlockers(firstResult)) {
@@ -210,11 +240,13 @@ public class LlmClient {
 
             // Repair attempt: send the bad response back with the detailed diagnostic report
             AssistantMod.LOGGER.info("Sending repair request to LLM with compiler diagnostic logs...");
+            reportProgress(progressListener, "repairing", "asking the model to fix compiler diagnostics");
             String report = firstResult.getLlmReport();
             String repairContent = callApi(url, apiKey, model, userMessage, content,
                     "Your previous response had the following VXB-1 compiler diagnostic errors and/or architectural warnings:\n" + report
                             + "\nPlease output ONLY the corrected VXB-1 text, ensuring all blocker errors and warnings are resolved. Start with 'VXB-1' on the first line.");
 
+            reportProgress(progressListener, "validating repair", "checking corrected text draft");
             VxbDiagnostics.DiagnosticResult repairResult = VxbDiagnostics.run(repairContent);
             if (hasNonMechanicalBlockers(repairResult)) {
                 AssistantMod.LOGGER.error("Repair response also failed with blocker errors:\n{}", repairResult.getLlmReport());
@@ -224,6 +256,8 @@ public class LlmClient {
             try {
                 BuildStructure structure2 = parseAndMechanicallyCorrect(repairContent, repairResult);
                 AssistantMod.LOGGER.info("LLM repair parse succeeded: {} blocks", structure2.getBlocks().size());
+                reportProgress(progressListener, "complete", "accepted repaired draft with "
+                        + structure2.getBlocks().size() + " blocks");
                 return structure2;
             } catch (IllegalArgumentException repairParseError) {
                 AssistantMod.LOGGER.error("Repair response also failed to parse: {}", repairParseError.getMessage());
@@ -233,6 +267,8 @@ public class LlmClient {
             try {
                 BuildStructure structure = parseAndMechanicallyCorrect(content, firstResult);
                 AssistantMod.LOGGER.info("LLM structure parsed successfully: {} blocks", structure.getBlocks().size());
+                reportProgress(progressListener, "complete", "accepted initial draft with "
+                        + structure.getBlocks().size() + " blocks");
                 return structure;
             } catch (IllegalArgumentException parseError) {
                 AssistantMod.LOGGER.error("VXB-1 parsing failed: {}", parseError.getMessage());
@@ -242,7 +278,8 @@ public class LlmClient {
     }
 
     /** Run a bounded local tool loop following OpenRouter's OpenAI-compatible tool-call protocol. */
-    private BuildStructure requestStructureWithTools(String description) throws Exception {
+    private BuildStructure requestStructureWithTools(
+            String description, Consumer<Progress> progressListener) throws Exception {
         String baseUrl = requireEnv("OPENROUTER_BASE_URL");
         String apiKey = requireEnv("OPENROUTER_API_KEY");
         String model = readModel();
@@ -256,6 +293,9 @@ public class LlmClient {
         String draftId = null;
         BuildStructure compiled = null;
         for (int turn = 0; turn < 8; turn++) {
+            String turnLabel = "turn " + (turn + 1) + "/8";
+            reportProgress(progressListener, turn == 0 ? "generating" : "revising",
+                    turnLabel + " — waiting for model response");
             JsonObject body = new JsonObject();
             body.addProperty("model", model);
             body.add("messages", messages);
@@ -273,8 +313,17 @@ public class LlmClient {
             if (calls == null || calls.isEmpty()) {
                 String content = assistant.has("content") && !assistant.get("content").isJsonNull()
                         ? assistant.get("content").getAsString() : "";
-                if (compiled != null) return compiled;
-                if (!content.isBlank()) return VxbCompiler.compile(content).structure();
+                if (compiled != null) {
+                    reportProgress(progressListener, "complete", "model finished with accepted draft " + draftId);
+                    return compiled;
+                }
+                if (!content.isBlank()) {
+                    reportProgress(progressListener, "compiling", turnLabel + " — validating final text draft");
+                    BuildStructure structure = VxbCompiler.compile(content).structure();
+                    reportProgress(progressListener, "complete", "accepted final text draft with "
+                            + structure.getBlocks().size() + " blocks");
+                    return structure;
+                }
                 throw new IllegalArgumentException("LLM stopped without compiling or submitting a VXB draft");
             }
 
@@ -302,6 +351,7 @@ public class LlmClient {
                 try {
                     switch (name) {
                         case "compile_vxb" -> {
+                            reportProgress(progressListener, "compiling", turnLabel + " — validating a new draft");
                             draftSource = requiredString(args, "vxb");
                             VxbCompiler.Compilation compilation = VxbCompiler.compile(draftSource);
                             compiled = compilation.structure();
@@ -313,6 +363,7 @@ public class LlmClient {
                             toolResult.addProperty("warnings", compilation.diagnostics().getLlmReport());
                         }
                         case "apply_vxb_patch" -> {
+                            reportProgress(progressListener, "repairing", turnLabel + " — applying a draft patch");
                             if (draftSource == null) throw new IllegalArgumentException("No draft exists; call compile_vxb first");
                             draftSource = VxbPatcher.apply(draftSource, requiredString(args, "patch"));
                             VxbCompiler.Compilation compilation = VxbCompiler.compile(draftSource);
@@ -324,15 +375,19 @@ public class LlmClient {
                             toolResult.addProperty("warnings", compilation.diagnostics().getLlmReport());
                         }
                         case "inspect_vxb" -> {
+                            reportProgress(progressListener, "inspecting", turnLabel + " — reviewing the compiled structure");
                             requireDraft(args, draftId, compiled);
                             toolResult.addProperty("draft_id", draftId);
                             toolResult.addProperty("projection", VxbPreviewRenderer.render(compiled));
                             if (visionReviewEnabled()) visualPreview = VxbPreviewRenderer.renderPngDataUrl(compiled);
                         }
                         case "submit_vxb" -> {
+                            reportProgress(progressListener, "submitting", turnLabel + " — accepting validated draft " + draftId);
                             requireDraft(args, draftId, compiled);
                             AssistantMod.LOGGER.info("LLM submitted validated tool draft {} ({} blocks)", draftId,
                                     compiled.getBlocks().size());
+                            reportProgress(progressListener, "complete", "accepted draft " + draftId + " with "
+                                    + compiled.getBlocks().size() + " blocks");
                             return compiled;
                         }
                         default -> throw new IllegalArgumentException("Unknown VXB tool: " + name);
@@ -340,12 +395,15 @@ public class LlmClient {
                 } catch (VxbCompiler.CompilationException e) {
                     compiled = null;
                     draftId = draftSource == null ? null : draftId(draftSource);
+                    reportProgress(progressListener, "awaiting repair", turnLabel
+                            + " — draft failed compilation; diagnostics returned to model");
                     toolResult.addProperty("accepted", false);
                     toolResult.addProperty("draft_id", draftId);
                     toolResult.addProperty("diagnostics", e.getMessage());
                     if (draftSource != null) toolResult.addProperty("numbered_source", VxbPatcher.numbered(draftSource));
                     toolResult.addProperty("next", "Call apply_vxb_patch with VXP-1 line edits, then compile_vxb only if replacing the entire design is truly necessary.");
                 } catch (IllegalArgumentException e) {
+                    reportProgress(progressListener, "correcting tool call", turnLabel + " — " + e.getMessage());
                     toolResult.addProperty("accepted", false);
                     toolResult.addProperty("error", e.getMessage());
                 }
@@ -353,8 +411,22 @@ public class LlmClient {
                 if (visualPreview != null) messages.add(imageMessage(visualPreview));
             }
         }
-        if (compiled != null) return compiled;
+        if (compiled != null) {
+            reportProgress(progressListener, "complete", "accepted final compiled draft " + draftId + " with "
+                    + compiled.getBlocks().size() + " blocks after the tool-turn limit");
+            return compiled;
+        }
         throw new IllegalArgumentException("LLM exceeded the 8-turn VXB tool limit without a valid submission");
+    }
+
+    private static void reportProgress(Consumer<Progress> listener, String step, String detail) {
+        Progress progress = new Progress(step, detail);
+        AssistantMod.LOGGER.info("LLM planning progress — {}", progress.summary());
+        try {
+            listener.accept(progress);
+        } catch (RuntimeException e) {
+            AssistantMod.LOGGER.warn("LLM progress listener failed: {}", e.getMessage());
+        }
     }
 
     private JsonObject sendChatRequest(String url, String apiKey, JsonObject body, boolean toolsEnabled) throws Exception {
