@@ -294,7 +294,9 @@ public class AssistantCommand {
         bot.setTask(new BuildTask(planId, origin));
         ctx.getSource().sendSuccess(
                 () -> Component.literal("§a[Assistant] Executing plan #" + planId + " (" + plan.getDescription()
-                        + " — " + plan.getBlockCount() + " blocks) at " + origin.toShortString()),
+                        + " — " + plan.getBlockCount() + " blocks"
+                        + (plan.getClearCount() == 0 ? "" : ", " + plan.getClearCount() + " carve cells")
+                        + ") centered at " + origin.toShortString()),
                 false);
         return 1;
     }
@@ -340,7 +342,9 @@ public class AssistantCommand {
             sb.append("\n  §f#").append(plan.getId())
               .append(": \"").append(plan.getDescription())
               .append("\" — ").append(plan.getBlockCount())
-              .append(" blocks (by ").append(plan.getCreatorName()).append(")");
+              .append(" blocks")
+              .append(plan.getClearCount() == 0 ? "" : ", " + plan.getClearCount() + " carve cells")
+              .append(" (by ").append(plan.getCreatorName()).append(")");
         }
 
         String output = sb.toString();
@@ -411,13 +415,14 @@ public class AssistantCommand {
                     }
                 }
 
-                if (structure.getBlocks().isEmpty()) {
-                    return "§c[Assistant] Import failed: parsed structure has no blocks";
+                if (structure.getBlocks().isEmpty() && structure.getClearCells().isEmpty()) {
+                    return "§c[Assistant] Import failed: parsed structure has no blocks or excavation cells";
                 }
 
                 var placementGroups = BuildStructure.planPlacementGroups(structure);
                 var sortedBlocks = placementGroups.stream().flatMap(group -> group.blocks().stream()).toList();
-                int planId = BuildPlanRegistry.getInstance().storeGrouped(description, creatorName, placementGroups);
+                int planId = BuildPlanRegistry.getInstance().storeGrouped(
+                        description, creatorName, structure, placementGroups);
 
                 AssistantMod.LOGGER.info("Imported plan #{} from URL ({} blocks, description: \"{}\")",
                         planId, sortedBlocks.size(), description);

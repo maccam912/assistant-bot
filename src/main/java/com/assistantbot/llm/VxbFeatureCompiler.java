@@ -21,6 +21,8 @@ public final class VxbFeatureCompiler {
     private VxbFeatureCompiler() {}
 
     public static Expansion expand(String source) {
+        VxbMacroCompiler.Expansion macros = VxbMacroCompiler.expand(source);
+        source = macros.vxb();
         String normalized = source.replace('\u2013', '-').replace('\u2014', '-').replace('\u2212', '-');
         String[] lines = normalized.split("\\r?\\n", -1);
         boolean isV11 = false;
@@ -30,6 +32,7 @@ public final class VxbFeatureCompiler {
         int sizeZ = -1;
         Set<Character> usedSymbols = new HashSet<>();
         Map<String, Character> existingStates = new HashMap<>();
+        Map<Character, String> paletteStates = new HashMap<>();
 
         boolean inPalette = false;
         for (String raw : lines) {
@@ -56,6 +59,7 @@ public final class VxbFeatureCompiler {
                     if (key.length() == 1) {
                         usedSymbols.add(key.charAt(0));
                         existingStates.put(normalizeState(state), key.charAt(0));
+                        paletteStates.put(key.charAt(0), normalizeState(state));
                     }
                 }
             }
@@ -65,9 +69,18 @@ public final class VxbFeatureCompiler {
             return new Expansion(source, List.of(), false);
         }
 
-        List<PlacementGroup> groups = new ArrayList<>();
+        List<PlacementGroup> groups = new ArrayList<>(macros.groups());
         Map<String, Character> generatedStates = new LinkedHashMap<>();
         Map<Cell, String> claims = new HashMap<>();
+        for (PlacementGroup group : groups) {
+            for (BlockEntry block : group.blocks()) {
+                Cell cell = new Cell(block.x(), block.y(), block.z());
+                String prior = claims.putIfAbsent(cell, group.id());
+                if (prior != null) {
+                    throw new IllegalArgumentException("Feature collision at " + cell + ": " + prior + " overlaps " + group.id());
+                }
+            }
+        }
         List<String> body = new ArrayList<>();
         boolean insideFeatures = false;
         boolean featuresComplete = false;
@@ -115,6 +128,12 @@ public final class VxbFeatureCompiler {
 
             if (featuresComplete && !line.isEmpty() && !line.startsWith("#")) {
                 throw new IllegalArgumentException("features must be the final VXB section; base geometry cannot overwrite reserved feature cells");
+            }
+
+            if (VxbPrimitiveCompiler.isPrimitive(line)) {
+                body.addAll(VxbPrimitiveCompiler.expand(line, paletteStates,
+                        state -> symbolFor(state, existingStates, generatedStates, usedSymbols)));
+                continue;
             }
 
             ExplicitLayer parsedLayer = parseExplicitLayer(line);

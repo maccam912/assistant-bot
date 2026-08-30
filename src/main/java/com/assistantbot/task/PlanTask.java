@@ -7,6 +7,7 @@ import com.assistantbot.llm.BuildStructure;
 import com.assistantbot.llm.BuildStructure.BlockEntry;
 import com.assistantbot.llm.BuildStructure.PlacementGroup;
 import com.assistantbot.llm.LlmClient;
+import com.assistantbot.llm.TerrainSnapshot;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.network.chat.Component;
@@ -59,7 +60,9 @@ public class PlanTask implements BotTask {
     @Override
     public void onStart(AssistantBot bot) {
         AssistantMod.LOGGER.info("PlanTask starting: \"{}\" (creator: {})", description, creatorName);
-        llmFuture = llmClient.requestStructureAsync(description, progress -> llmProgress = progress);
+        String terrainContext = TerrainSnapshot.capture(bot.getWorld(), bot.getBlockPos());
+        llmFuture = llmClient.requestStructureAsync(description, terrainContext,
+                progress -> llmProgress = progress);
     }
 
     @Override
@@ -98,9 +101,9 @@ public class PlanTask implements BotTask {
             AssistantMod.LOGGER.info("LLM returned {} blocks for \"{}\"",
                     structure.getBlocks().size(), description);
 
-            if (structure.getBlocks().isEmpty()) {
-                AssistantMod.LOGGER.warn("LLM returned empty structure");
-                sendMessage("§c[Assistant] Plan failed: LLM returned empty structure.");
+            if (structure.getBlocks().isEmpty() && structure.getClearCells().isEmpty()) {
+                AssistantMod.LOGGER.warn("LLM returned empty structure and excavation mask");
+                sendMessage("§c[Assistant] Plan failed: LLM returned no blocks or excavation cells.");
                 return TickResult.FAILED;
             }
 
@@ -151,11 +154,13 @@ public class PlanTask implements BotTask {
     // --- Phase: STORING ---
 
     private TickResult tickStoring() {
-        lastPlanId = BuildPlanRegistry.getInstance().storeGrouped(description, creatorName, placementGroups);
+        lastPlanId = BuildPlanRegistry.getInstance().storeGrouped(description, creatorName, structure, placementGroups);
         AssistantMod.LOGGER.info("Plan stored with ID {} ({} blocks, description: \"{}\")",
                 lastPlanId, sortedBlocks.size(), description);
         sendMessage("§a[Assistant] Plan ready! ID: " + lastPlanId + " (" + description
-                + " — " + sortedBlocks.size() + " blocks)");
+                + " — " + sortedBlocks.size() + " blocks"
+                + (structure.getClearCells().isEmpty() ? "" : ", " + structure.getClearCells().size() + " carved cells")
+                + ")");
         phase = PlanPhase.DONE;
         return TickResult.COMPLETE;
     }

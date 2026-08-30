@@ -49,6 +49,15 @@ public class BuildPlanRegistry {
         return id;
     }
 
+    /** Store placement operations together with centering and terrain-policy metadata. */
+    public int storeGrouped(String description, String creatorName, BuildStructure structure,
+                            List<PlacementGroup> groups) {
+        int id = nextId.getAndIncrement();
+        BuildPlan plan = BuildPlan.grouped(id, description, creatorName, structure, groups);
+        plans.put(id, plan);
+        return id;
+    }
+
     /**
      * Look up a plan by ID.
      * @return the plan, or null if not found

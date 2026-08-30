@@ -161,6 +161,17 @@ public class LlmClient {
 
             set 4 1 3 T""";
 
+    private static final String SYSTEM_PROMPT_FALLBACK = """
+            Generate only a compact, buildable VXB-1.1 structure. Coordinates are local with
+            x=east, y=up, z=south; the declared size is centered horizontally on the bot.
+            Use a palette followed by box/set/layer commands, geometry primitives (sphere,
+            ellipsoid, cylinder, cone, pyramid, triangle, staircase), reusable macro/use
+            instances, and a final semantic features section. Use terrain_mode preserve plus
+            explicit air symbols for terrain-integrated excavation, or terrain_mode replace
+            for a cleared freestanding volume. Keep all coordinates inside size, connect the
+            structure to y=0 unless allow_floating is intentional, and submit through the VXB
+            tools when available. Output no reasoning, fences, or commentary.""";
+
     /** Canonical prompt is a resource shared with docs; the embedded VXB-1 prompt is only a fallback. */
     private static final String SYSTEM_PROMPT = loadSystemPrompt();
 
@@ -191,10 +202,15 @@ public class LlmClient {
      */
     public CompletableFuture<BuildStructure> requestStructureAsync(
             String description, Consumer<Progress> progressListener) {
+        return requestStructureAsync(description, "", progressListener);
+    }
+
+    public CompletableFuture<BuildStructure> requestStructureAsync(
+            String description, String terrainContext, Consumer<Progress> progressListener) {
         Consumer<Progress> listener = progressListener != null ? progressListener : NO_PROGRESS_LISTENER;
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return requestStructure(description, listener);
+                return requestStructure(description, terrainContext, listener);
             } catch (Exception e) {
                 throw new RuntimeException("LLM request failed: " + e.getMessage(), e);
             }
@@ -203,25 +219,26 @@ public class LlmClient {
 
 
 
-    private BuildStructure requestStructure(String description, Consumer<Progress> progressListener) throws Exception {
+    private BuildStructure requestStructure(String description, String terrainContext,
+                                            Consumer<Progress> progressListener) throws Exception {
         try {
             reportProgress(progressListener, "starting", "preparing tool-assisted generation");
-            return requestStructureWithTools(description, progressListener);
+            return requestStructureWithTools(description, terrainContext, progressListener);
         } catch (ToolUnavailableException e) {
             AssistantMod.LOGGER.warn("Selected model/provider cannot use VXB tools; falling back to text: {}", e.getMessage());
             reportProgress(progressListener, "falling back", "model/provider does not support VXB tools; using text generation");
-            return requestStructureWithoutTools(description, progressListener);
+            return requestStructureWithoutTools(description, terrainContext, progressListener);
         }
     }
 
     private BuildStructure requestStructureWithoutTools(
-            String description, Consumer<Progress> progressListener) throws Exception {
+            String description, String terrainContext, Consumer<Progress> progressListener) throws Exception {
         String baseUrl = requireEnv("OPENROUTER_BASE_URL");
         String apiKey = requireEnv("OPENROUTER_API_KEY");
         String model = readModel();
 
         String url = baseUrl.replaceAll("/+$", "") + "/chat/completions";
-        String userMessage = "Description: " + description + "\nAvailable inventory: infinite (creative mode)";
+        String userMessage = buildUserMessage(description, terrainContext);
 
         // First attempt
         AssistantMod.LOGGER.info("Requesting structure from LLM for: \"{}\"", description);
@@ -279,7 +296,7 @@ public class LlmClient {
 
     /** Run a bounded local tool loop following OpenRouter's OpenAI-compatible tool-call protocol. */
     private BuildStructure requestStructureWithTools(
-            String description, Consumer<Progress> progressListener) throws Exception {
+            String description, String terrainContext, Consumer<Progress> progressListener) throws Exception {
         String baseUrl = requireEnv("OPENROUTER_BASE_URL");
         String apiKey = requireEnv("OPENROUTER_API_KEY");
         String model = readModel();
@@ -287,7 +304,7 @@ public class LlmClient {
 
         JsonArray messages = new JsonArray();
         messages.add(message("system", SYSTEM_PROMPT));
-        messages.add(message("user", "Description: " + description + "\nAvailable inventory: infinite (creative mode)"));
+        messages.add(message("user", buildUserMessage(description, terrainContext)));
 
         String draftSource = null;
         String draftId = null;
@@ -427,6 +444,15 @@ public class LlmClient {
         } catch (RuntimeException e) {
             AssistantMod.LOGGER.warn("LLM progress listener failed: {}", e.getMessage());
         }
+    }
+
+    static String buildUserMessage(String description, String terrainContext) {
+        StringBuilder message = new StringBuilder("Description: ").append(description)
+                .append("\nAvailable inventory: infinite (creative mode)");
+        if (terrainContext != null && !terrainContext.isBlank()) {
+            message.append("\n\n").append(terrainContext);
+        }
+        return message.toString();
     }
 
     private JsonObject sendChatRequest(String url, String apiKey, JsonObject body, boolean toolsEnabled) throws Exception {
@@ -706,11 +732,11 @@ public class LlmClient {
 
     private static String loadSystemPrompt() {
         try (var stream = LlmClient.class.getResourceAsStream("/vxb1-prompt.md")) {
-            if (stream == null) return SYSTEM_PROMPT_BASE;
+            if (stream == null) return SYSTEM_PROMPT_FALLBACK;
             return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             AssistantMod.LOGGER.warn("Could not load /vxb1-prompt.md; using embedded fallback: {}", e.getMessage());
-            return SYSTEM_PROMPT_BASE;
+            return SYSTEM_PROMPT_FALLBACK;
         }
     }
 }

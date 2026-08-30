@@ -7,6 +7,7 @@ import com.assistantbot.llm.BlockStateResolver;
 import com.assistantbot.llm.BuildPlan;
 import com.assistantbot.llm.BuildPlanRegistry;
 import com.assistantbot.llm.BuildStructure.BlockEntry;
+import com.assistantbot.llm.BuildStructure.Cell;
 import com.assistantbot.llm.BuildStructure.PlacementGroup;
 import com.assistantbot.util.LookHelper;
 import com.assistantbot.util.NavigationHelper;
@@ -30,8 +31,8 @@ import net.minecraft.world.phys.Vec3;
  *
  * Phases: WAITING -> CLEARING -> PLACING -> FINALIZING -> DONE
  *
- * The origin (bot's position at execute time) localizes the plan
- * so the same plan can be stamped at different locations.
+ * The bot's position at execute time is the horizontal center of the declared
+ * plan size, so the same plan can be stamped at different locations.
  */
 public class BuildTask implements BotTask {
 
@@ -45,7 +46,8 @@ public class BuildTask implements BotTask {
     private static final double BUILD_VISUAL_MOVE_SPEED = 0.26;
 
     private final int planId;
-    private final BlockPos originPos;
+    private final BlockPos centerPos;
+    private BlockPos originPos;
 
     private BuildPhase phase;
     private BuildPlan plan; // resolved from registry in onStart
@@ -69,10 +71,11 @@ public class BuildTask implements BotTask {
     private BlockPos clearMax;
     private int clearCurrentY;
     private int totalCleared;
+    private int clearCellIndex;
 
-    public BuildTask(int planId, BlockPos originPos) {
+    public BuildTask(int planId, BlockPos centerPos) {
         this.planId = planId;
-        this.originPos = originPos;
+        this.centerPos = centerPos;
         this.phase = BuildPhase.WAITING;
         this.retryCount = new HashMap<>();
         this.retryQueue = new ArrayList<>();
@@ -91,15 +94,17 @@ public class BuildTask implements BotTask {
 
         sortedBlocks = plan.getSortedBlocks();
         placementGroups = plan.getPlacementGroups();
+        originPos = centeredOrigin(centerPos, plan);
         currentOperationIndex = 0;
         totalPlaced = 0;
         totalSkipped = 0;
 
-        AssistantMod.LOGGER.info("BuildTask starting: plan #{} \"{}\" ({} blocks) at {}",
-                planId, plan.getDescription(), sortedBlocks.size(), originPos);
+        AssistantMod.LOGGER.info("BuildTask starting: plan #{} \"{}\" ({} blocks) centered at {} (local origin {})",
+                planId, plan.getDescription(), sortedBlocks.size(), centerPos, originPos);
         sendMessage(bot, "§a[Assistant] Building plan #" + planId + " in 5 seconds... ("
                 + plan.getDescription() + " — " + sortedBlocks.size() + " blocks at "
-                + BuildRateLimiter.format(bot.getBuildSpeedBlocksPerSecond()) + " blocks/s)");
+                + BuildRateLimiter.format(bot.getBuildSpeedBlocksPerSecond()) + " blocks/s"
+                + (plan.getClearCount() == 0 ? "" : ", " + plan.getClearCount() + " carve cells") + ")");
     }
 
     @Override
@@ -135,15 +140,21 @@ public class BuildTask implements BotTask {
         computeClearBounds();
         clearCurrentY = clearMax.getY();
         totalCleared = 0;
+        clearCellIndex = 0;
         phase = BuildPhase.CLEARING;
-        AssistantMod.LOGGER.info("Wait complete. Clearing area from {} to {} for plan #{}",
-                clearMin, clearMax, planId);
+        AssistantMod.LOGGER.info("Wait complete. {} terrain for plan #{}",
+                plan.shouldPreserveTerrain() ? "Clearing only explicitly carved cells" : "Clearing build bounds", planId);
         return TickResult.CONTINUE;
     }
 
     // --- Phase: CLEARING ---
 
     private void computeClearBounds() {
+        if (plan.getSizeX() > 0 && plan.getSizeY() > 0 && plan.getSizeZ() > 0) {
+            clearMin = originPos;
+            clearMax = originPos.offset(plan.getSizeX() - 1, plan.getSizeY() - 1, plan.getSizeZ() - 1);
+            return;
+        }
         int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
         int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
         for (BlockEntry entry : sortedBlocks) {
@@ -154,11 +165,21 @@ public class BuildTask implements BotTask {
             maxY = Math.max(maxY, entry.y());
             maxZ = Math.max(maxZ, entry.z());
         }
+        for (Cell cell : plan.getClearCells()) {
+            minX = Math.min(minX, cell.x());
+            minY = Math.min(minY, cell.y());
+            minZ = Math.min(minZ, cell.z());
+            maxX = Math.max(maxX, cell.x());
+            maxY = Math.max(maxY, cell.y());
+            maxZ = Math.max(maxZ, cell.z());
+        }
         clearMin = originPos.offset(new Vec3i(minX, minY, minZ));
         clearMax = originPos.offset(new Vec3i(maxX, maxY, maxZ));
     }
 
     private TickResult tickClearing(AssistantBot bot) {
+        if (plan.shouldPreserveTerrain()) return tickClearingExplicitCells(bot);
+
         if (clearCurrentY < clearMin.getY()) {
             AssistantMod.LOGGER.info("Clearing complete: {} blocks removed", totalCleared);
             phase = BuildPhase.PLACING;
@@ -187,6 +208,43 @@ public class BuildTask implements BotTask {
 
         clearCurrentY--;
         return TickResult.CONTINUE;
+    }
+
+    private TickResult tickClearingExplicitCells(AssistantBot bot) {
+        List<Cell> clearCells = plan.getClearCells();
+        ServerLevel world = bot.getWorld();
+        BlockState air = Blocks.AIR.defaultBlockState();
+        int budget = Math.max(1, rateLimiter.takeBlockBudget(bot.getBuildSpeedBlocksPerSecond()));
+        for (int i = 0; i < budget && clearCellIndex < clearCells.size(); i++) {
+            Cell cell = clearCells.get(clearCellIndex++);
+            BlockPos pos = originPos.offset(new Vec3i(cell.x(), cell.y(), cell.z()));
+            if (!world.getBlockState(pos).isAir()) {
+                world.setBlock(pos, air, Block.UPDATE_ALL);
+                totalCleared++;
+            }
+        }
+        if (clearCellIndex >= clearCells.size()) {
+            AssistantMod.LOGGER.info("Terrain-preserving clear complete: {} explicit cells removed", totalCleared);
+            phase = BuildPhase.PLACING;
+        }
+        return TickResult.CONTINUE;
+    }
+
+    static BlockPos centeredOrigin(BlockPos center, BuildPlan plan) {
+        int localCenterX;
+        int localCenterZ;
+        if (plan.getSizeX() > 0 && plan.getSizeZ() > 0) {
+            localCenterX = plan.getSizeX() / 2;
+            localCenterZ = plan.getSizeZ() / 2;
+        } else {
+            int minX = plan.getSortedBlocks().stream().mapToInt(BlockEntry::x).min().orElse(0);
+            int maxX = plan.getSortedBlocks().stream().mapToInt(BlockEntry::x).max().orElse(0);
+            int minZ = plan.getSortedBlocks().stream().mapToInt(BlockEntry::z).min().orElse(0);
+            int maxZ = plan.getSortedBlocks().stream().mapToInt(BlockEntry::z).max().orElse(0);
+            localCenterX = Math.floorDiv(minX + maxX, 2);
+            localCenterZ = Math.floorDiv(minZ + maxZ, 2);
+        }
+        return center.offset(-localCenterX, 0, -localCenterZ);
     }
 
     // --- Phase: PLACING ---
@@ -277,6 +335,7 @@ public class BuildTask implements BotTask {
                 AssistantMod.LOGGER.info("Build complete: {} placed, {} skipped (plan #{})",
                         totalPlaced, totalSkipped, planId);
                 sendMessage(bot, "§a[Assistant] Build complete! " + totalPlaced + " blocks placed"
+                        + (totalCleared > 0 ? ", " + totalCleared + " terrain blocks cleared" : "")
                         + (totalSkipped > 0 ? " (" + totalSkipped + " skipped)" : "")
                         + " — plan #" + planId);
                 return TickResult.COMPLETE;

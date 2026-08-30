@@ -2,9 +2,88 @@
 
 VXB-1 remains accepted for imports. VXB-1.1 adds local explicit layers, semantic
 multi-block features, atomic placement groups, support/collision validation, and
-the opt-in `allow_floating` header. The canonical model-facing grammar and example
+the opt-in `allow_floating` header. It now also includes deterministic geometry
+primitives, reusable rotated macros, centered placement, terrain snapshots, and
+terrain-preserving excavation. The canonical model-facing grammar and example
 live in [`docs/vxb1-prompt.md`](docs/vxb1-prompt.md); the same prompt is packaged as
 `src/main/resources/vxb1-prompt.md` and loaded by the mod at runtime.
+
+## Centered, terrain-aware placement
+
+The bot's block at execute time is the horizontal center of the declared `size`,
+not the structure's northwest corner. Local `(floor(sizeX/2), 0,
+floor(sizeZ/2))` maps to the bot marker. Even dimensions necessarily have no
+single geometric center, so the volume extends one extra block west/north.
+
+Planning captures a 21×21 site survey before starting the background LLM call.
+It includes relative surface heights, surface materials, the blocks immediately
+under local y=0, and solid/fluid occupancy slices through y=24. The snapshot is
+immutable text, so no world access occurs from the request worker thread.
+
+`terrain_mode replace` preserves the original behavior: clear the plan bounds,
+then place the structure. `terrain_mode preserve` retains unused world cells and
+clears only coordinates explicitly written with a palette symbol mapped to air.
+Layer `.` remains a plan-level eraser rather than an excavation instruction. This
+distinction lets a model merge a cliff house into rock while still carving its
+rooms and doorway deterministically.
+
+## Geometry primitives
+
+VXB-1.1 expands these commands to ordinary last-write-wins voxel operations
+before parsing and validation:
+
+```text
+sphere CX CY CZ R S [hollow=true]
+ellipsoid CX CY CZ RX RY RZ S [hollow=true]
+cylinder CX Y CZ R H S [hollow=true] [caps=true|false]
+cone CX Y CZ R H S [hollow=true] [cap=true|false]
+pyramid CX Y CZ R H S [hollow=true] [cap=true|false]
+triangle X Y Z BASE HEIGHT DEPTH S [axis=x|z] [hollow=true] [caps=true|false]
+staircase X Y Z WIDTH STEPS MATERIAL up=DIRECTION fill=S [support=solid|none] [half=bottom|top]
+```
+
+The curved primitives use integer-center voxel membership and one-block shells.
+The triangle is an extruded isosceles cross-section, which makes it useful for
+gable ends and pitched roofs rather than an ambiguous flat polygon. Staircases
+generate exact stair facing states; solid support fills the wedge beneath the
+treads so it is grounded and survival-buildable. Primitive output receives the
+same bounds, registry, grounding, gravity, access, and placement-order checks as
+handwritten boxes and sets.
+
+## Reusable macros and villages
+
+Macros define a bounded local module once and stamp transformed instances:
+
+```text
+macro cottage size 7 6 7
+box 0 0 0 6 0 6 C
+layer y 1-3 x 0 z 0 w 7 d 7
+PPPPPPP
+P.....P
+P.....P
+P.....P
+P.....P
+P.....P
+PPPPPPP
+endlayer
+triangle 0 4 0 7 2 7 P axis=x hollow=true caps=false
+features
+door 3 1 6 spruce outside=south
+endfeatures
+endmacro
+
+use cottage at 1 0 1
+use cottage at 12 0 1 rotate=90
+use cottage at 1 0 12 rotate=180 mirror=x
+```
+
+`rotate` accepts 0/90/180/270 degrees clockwise from above, followed by optional
+X or Z mirroring. Expansion transforms coordinates, facing states, horizontal
+axes, directional connection properties, hinges, stair handedness, support
+cells, and atomic feature groups. Each macro is compiled in isolation against
+its declared size and the global palette. Instances then pass through outer-plan
+collision and bounds validation. Limits of 256 instances and 250,000 expanded
+cells prevent accidental runaway generations.
 
 ## VXB-1.1 additions
 

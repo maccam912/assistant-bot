@@ -33,26 +33,31 @@ public class BuildStructure {
     private final List<BlockEntry> blocks;
     private final Map<String, Integer> materials;
     private final List<PlacementGroup> featureGroups;
+    private final Set<Cell> clearCells;
     private final int sizeX;
     private final int sizeY;
     private final int sizeZ;
     private final boolean allowFloating;
+    private final boolean preserveTerrain;
     private VxbDiagnostics.DiagnosticResult diagnostics;
 
     public BuildStructure(List<BlockEntry> blocks, Map<String, Integer> materials) {
-        this(blocks, materials, List.of(), -1, -1, -1, false);
+        this(blocks, materials, List.of(), Set.of(), -1, -1, -1, false, false);
     }
 
     public BuildStructure(List<BlockEntry> blocks, Map<String, Integer> materials,
-                          List<PlacementGroup> featureGroups, int sizeX, int sizeY, int sizeZ,
-                          boolean allowFloating) {
+                          List<PlacementGroup> featureGroups, Set<Cell> clearCells,
+                          int sizeX, int sizeY, int sizeZ, boolean allowFloating,
+                          boolean preserveTerrain) {
         this.blocks = blocks;
         this.materials = materials;
         this.featureGroups = List.copyOf(featureGroups);
+        this.clearCells = Set.copyOf(clearCells);
         this.sizeX = sizeX;
         this.sizeY = sizeY;
         this.sizeZ = sizeZ;
         this.allowFloating = allowFloating;
+        this.preserveTerrain = preserveTerrain;
         this.diagnostics = new VxbDiagnostics.DiagnosticResult();
     }
 
@@ -60,10 +65,12 @@ public class BuildStructure {
     public Map<String, Integer> getMaterials() { return materials; }
     public VxbDiagnostics.DiagnosticResult getDiagnostics() { return diagnostics; }
     public List<PlacementGroup> getFeatureGroups() { return featureGroups; }
+    public Set<Cell> getClearCells() { return clearCells; }
     public int getSizeX() { return sizeX; }
     public int getSizeY() { return sizeY; }
     public int getSizeZ() { return sizeZ; }
     public boolean isFloatingAllowed() { return allowFloating; }
+    public boolean shouldPreserveTerrain() { return preserveTerrain; }
     public void setDiagnostics(VxbDiagnostics.DiagnosticResult diagnostics) { this.diagnostics = diagnostics; }
 
     /**
@@ -163,6 +170,7 @@ public class BuildStructure {
         Map<Character, String> palette = new HashMap<>();
         int sizeX = -1, sizeY = -1, sizeZ = -1;
         boolean hasBounds = false;
+        boolean preserveTerrain = false;
 
         // Use a position map for last-write-wins semantics
         // key = packed position, value = block ID
@@ -250,6 +258,18 @@ public class BuildStructure {
                 // Origin is informational — the actual world-space anchor is provided by
                 // BuildTask. We parse but don't use it (build is always relative).
                 continue;
+            }
+
+            if (line.equals("terrain_mode preserve")) {
+                preserveTerrain = true;
+                continue;
+            }
+            if (line.equals("terrain_mode replace")) {
+                preserveTerrain = false;
+                continue;
+            }
+            if (line.startsWith("terrain_mode ")) {
+                throw new IllegalArgumentException("terrain_mode must be replace or preserve");
             }
 
             // size
@@ -357,13 +377,16 @@ public class BuildStructure {
         // Convert position map to block entries and compute materials
         List<BlockEntry> blocks = new ArrayList<>();
         Map<String, Integer> materials = new HashMap<>();
+        Set<Cell> clearCells = new HashSet<>();
 
         for (Map.Entry<Long, String> entry : positionMap.entrySet()) {
             long packed = entry.getKey();
             String blockId = entry.getValue();
             // Skip air blocks — the build volume is already cleared before placing,
-            // so air entries just waste time (navigate, fail, retry, skip).
+            // so air entries become an explicit clear mask rather than placement work.
             if (blockId.equals("minecraft:air") || blockId.equals("air")) {
+                int[] coords = unpackPos(packed);
+                clearCells.add(new Cell(coords[0], coords[1], coords[2]));
                 continue;
             }
             int[] coords = unpackPos(packed);
@@ -371,12 +394,12 @@ public class BuildStructure {
             materials.merge(blockId, 1, Integer::sum);
         }
 
-        if (blocks.isEmpty()) {
-            throw new IllegalArgumentException("VXB-1 parsed successfully but produced no blocks");
+        if (blocks.isEmpty() && clearCells.isEmpty()) {
+            throw new IllegalArgumentException("VXB-1 parsed successfully but produced no blocks or explicit excavation cells");
         }
 
-        return new BuildStructure(blocks, materials, expansion.groups(), sizeX, sizeY, sizeZ,
-                expansion.allowFloating());
+        return new BuildStructure(blocks, materials, expansion.groups(), clearCells,
+                sizeX, sizeY, sizeZ, expansion.allowFloating(), preserveTerrain);
     }
 
     /**

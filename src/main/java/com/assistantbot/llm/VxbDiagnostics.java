@@ -267,7 +267,8 @@ public class VxbDiagnostics {
             }
 
             // --- Non-section commands & metadata ---
-            if (line.startsWith("name ") || line.startsWith("axes ") || line.startsWith("origin ")) {
+            if (line.startsWith("name ") || line.startsWith("axes ") || line.startsWith("origin ")
+                    || line.equals("terrain_mode replace") || line.equals("terrain_mode preserve")) {
                 continue;
             }
 
