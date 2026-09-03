@@ -1,11 +1,5 @@
 package com.assistantbot.llm;
 
-import com.assistantbot.llm.BuildStructure.BlockEntry;
-import com.assistantbot.llm.BuildStructure.PlacementGroup;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-
 /** One deterministic entry point for imports, LLM drafts, diagnostics, and previews. */
 public final class VxbCompiler {
     public record Compilation(BuildStructure structure, VxbDiagnostics.DiagnosticResult diagnostics,
@@ -14,65 +8,30 @@ public final class VxbCompiler {
     private VxbCompiler() {}
 
     public static Compilation compile(String source) {
-        VxbDiagnostics.DiagnosticResult syntax = VxbDiagnostics.run(source);
-        if (hasNonRegistryBlockers(syntax)) {
-            throw new CompilationException(syntax.getLlmReport(), syntax);
-        }
-
         BuildStructure structure;
         try {
             structure = BuildStructure.parse(source);
         } catch (IllegalArgumentException e) {
-            VxbDiagnostics.DiagnosticResult failed = copyWithoutRegistryBlockers(syntax);
-            failed.add(VxbDiagnostics.Severity.BLOCKER, "VXB Parse", e.getMessage(), null);
+            VxbDiagnostics.DiagnosticResult failed = new VxbDiagnostics.DiagnosticResult();
+            failed.add(VxbDiagnostics.Severity.BLOCKER, "VXB-2 Syntax", e.getMessage(),
+                    VxbDiagnostics.lineNumber(e.getMessage()));
             throw new CompilationException(failed.getLlmReport(), failed);
         }
 
-        Set<String> semanticStates = new HashSet<>();
-        for (PlacementGroup group : structure.getFeatureGroups()) {
-            for (BlockEntry block : group.blocks()) semanticStates.add(block.blockId());
+        VxbDiagnostics.DiagnosticResult result = new VxbDiagnostics.DiagnosticResult();
+        for (String note : structure.getNotes()) {
+            result.add(VxbDiagnostics.Severity.WARNING, "Compiler Correction", note, null);
         }
-
-        int corrected = 0;
-        Map<String, String> replacements = BlockIdResolver.mechanicalReplacements(structure.getUniqueBlockIds());
-        for (Map.Entry<String, String> replacement : replacements.entrySet()) {
-            if (semanticStates.contains(replacement.getKey())) continue;
-            structure.replaceBlockId(replacement.getKey(), replacement.getValue());
-            corrected++;
-        }
-
-        VxbDiagnostics.DiagnosticResult effective = copyWithoutRegistryBlockers(syntax);
         for (String blockId : structure.getUniqueBlockIds()) {
             if (!BlockIdResolver.isValidBlockId(blockId)) {
-                effective.add(VxbDiagnostics.Severity.BLOCKER, "Invalid Minecraft Block ID",
-                        "Semantic or palette block '" + blockId + "' is not in the server registry.", null);
+                result.add(VxbDiagnostics.Severity.BLOCKER, "Invalid Minecraft Block ID",
+                        "Block '" + blockId + "' is not in the server registry.", null);
             }
         }
-        if (corrected > 0) {
-            effective.add(VxbDiagnostics.Severity.WARNING, "Mechanical Block ID Correction",
-                    "Corrected " + corrected + " invalid ordinary palette block ID(s) to the closest server registry IDs.", null);
-        }
-        VxbStructureValidator.validate(structure, effective);
-        structure.setDiagnostics(effective);
-        if (effective.hasBlockers()) throw new CompilationException(effective.getLlmReport(), effective);
-        return new Compilation(structure, effective, corrected);
-    }
-
-    private static boolean hasNonRegistryBlockers(VxbDiagnostics.DiagnosticResult result) {
-        for (VxbDiagnostics.Diagnostic diagnostic : result.getBlockers()) {
-            if (!diagnostic.checkName().equals("Invalid Minecraft Block ID")) return true;
-        }
-        return false;
-    }
-
-    private static VxbDiagnostics.DiagnosticResult copyWithoutRegistryBlockers(VxbDiagnostics.DiagnosticResult result) {
-        VxbDiagnostics.DiagnosticResult copy = new VxbDiagnostics.DiagnosticResult();
-        for (VxbDiagnostics.Diagnostic diagnostic : result.getDiagnostics()) {
-            if (diagnostic.severity() == VxbDiagnostics.Severity.BLOCKER
-                    && diagnostic.checkName().equals("Invalid Minecraft Block ID")) continue;
-            copy.add(diagnostic.severity(), diagnostic.checkName(), diagnostic.message(), diagnostic.lineNum());
-        }
-        return copy;
+        VxbStructureValidator.validate(structure, result);
+        structure.setDiagnostics(result);
+        if (result.hasBlockers()) throw new CompilationException(result.getLlmReport(), result);
+        return new Compilation(structure, result, structure.getNotes().size());
     }
 
     public static final class CompilationException extends IllegalArgumentException {

@@ -12,16 +12,18 @@ import org.junit.jupiter.api.Test;
 
 class BuildStructureTest {
     @Test
-    void parseNormalizesPaletteIdsAndCountsBoxMaterials() {
+    void paletteIdsAreNamespacedAndMaterialsCounted() {
         BuildStructure structure = BuildStructure.parse("""
-                VXB-1
+                VXB-2
                 size 3 2 1
-                palette
-                S = stone
-                G = minecraft:glass
-                endpalette
-                box 0 0 0 1 1 0 S
-                set 2 0 0 G
+                pal
+                S stone
+                G minecraft:glass
+                end
+                plan y=0
+                SSG
+                plan y=1
+                SS.
                 """);
 
         assertEquals(5, structure.getBlocks().size());
@@ -31,19 +33,16 @@ class BuildStructureTest {
     }
 
     @Test
-    void layerRangesDuplicateRowsAndAirClearsPriorBlocks() {
+    void aPlaneRangeDrawsIdenticalLevelsOnce() {
         BuildStructure structure = BuildStructure.parse("""
-                VXB-1
+                VXB-2
                 size 3 3 2
-                palette
-                S = stone
-                W = oak_planks
-                endpalette
-                box 0 0 0 2 0 0 S
-                layer y 0-1 z 0
+                pal
+                W oak_planks
+                end
+                plan y=0..1
                 W.W
                 .W.
-                endlayer
                 """);
 
         Map<String, String> blocks = byPosition(structure.getBlocks());
@@ -53,7 +52,7 @@ class BuildStructureTest {
         assertEquals("minecraft:oak_planks", blocks.get("0,1,0"));
         assertEquals("minecraft:oak_planks", blocks.get("2,1,0"));
         assertEquals("minecraft:oak_planks", blocks.get("1,1,1"));
-        assertTrue(!blocks.containsKey("1,0,0"), "air in later layer should clear prior box block");
+        assertTrue(!blocks.containsKey("1,0,0"), "'.' is air, not a hole in the drawing");
         assertEquals(6, blocks.size());
     }
 
@@ -61,14 +60,13 @@ class BuildStructureTest {
     void parseStripsMarkdownFencesAndNormalizesUnicodeDashRanges() {
         BuildStructure structure = BuildStructure.parse("""
                 ```vxb
-                VXB-1
+                VXB-2
                 size 1 2 1
-                palette
-                S = stone
-                endpalette
-                layer y 0\u20131 z 0
+                pal
+                S stone
+                end
+                plan y=0\u20131
                 S
-                endlayer
                 ```
                 """);
 
@@ -80,14 +78,16 @@ class BuildStructureTest {
     void parseRejectsUndefinedPaletteSymbols() {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () ->
                 BuildStructure.parse("""
-                        VXB-1
-                        palette
-                        S = stone
-                        endpalette
-                        set 0 0 0 W
+                        VXB-2
+                        size 1 1 1
+                        pal
+                        S stone
+                        end
+                        plan y=0
+                        W
                         """));
 
-        assertTrue(error.getMessage().contains("undefined palette symbol"));
+        assertTrue(error.getMessage().contains("Symbol 'W' is not in the palette"), error.getMessage());
     }
 
     @Test

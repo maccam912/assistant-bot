@@ -12,12 +12,13 @@ class BuildTaskCenteringTest {
     @Test
     void declaredPlanSizeIsCenteredOnBotBlock() {
         BuildStructure structure = BuildStructure.parse("""
-                VXB-1.1
+                VXB-2
                 size 8 2 9
-                palette
-                S = stone
-                endpalette
-                set 0 0 0 S
+                pal
+                S stone
+                end
+                plan y=0 x=0 z=0
+                S
                 """);
         BuildPlan plan = BuildPlan.grouped(1, "test", "tester", structure,
                 BuildStructure.planPlacementGroups(structure));

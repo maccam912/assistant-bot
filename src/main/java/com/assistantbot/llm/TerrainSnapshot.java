@@ -90,8 +90,8 @@ public final class TerrainSnapshot {
             for (char[] row : occupancy[slice]) out.append(row).append('\n');
         }
         out.append("Use this survey to choose foundations, stilts, terraces, retaining walls, entrances, and materials that fit the site. ")
-                .append("Use terrain_mode preserve when terrain should remain inside unused parts of the build volume; explicitly write an air palette symbol where tunnels, rooms, or doorways must be carved. ")
-                .append("Use terrain_mode replace when the whole rectangular build volume should be cleared. A '.' in a layer removes planned geometry but does not explicitly carve preserved world terrain.");
+                .append("Use 'terrain keep' when the surrounding ground should stay inside the build volume; every cell you draw as '.' is then excavated, so carve tunnels, rooms and doorways explicitly. ")
+                .append("Use 'terrain replace' when the whole rectangular volume should be cleared and levelled first.");
         return out.toString();
     }
 

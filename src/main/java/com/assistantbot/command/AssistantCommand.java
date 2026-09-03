@@ -57,7 +57,7 @@ import net.minecraft.server.level.ServerPlayer;
  *   plan <description>      — generate a build plan (LLM), returns plan ID
  *   execute <id>           — execute a stored plan at bot's current position
  *   plans                   — list all available build plans
- *   import <url> <desc>    — import a VXB-1 plan from a URL
+ *   import <url> <desc>    — import a VXB-2 plan from a URL
  *   build <description>    — plan + auto-execute (convenience)
  *   speed [blocks/sec]     — show or change the active/future build rate
  *   status                  — show current task and position
@@ -437,7 +437,7 @@ public class AssistantCommand {
 
             } catch (IllegalArgumentException parseError) {
                 AssistantMod.LOGGER.warn("Import parse failed: {}", parseError.getMessage());
-                return "§c[Assistant] Import failed — VXB-1 parse error: " + parseError.getMessage();
+                return "§c[Assistant] Import failed — VXB-2 parse error: " + parseError.getMessage();
             } catch (Exception e) {
                 AssistantMod.LOGGER.warn("Import fetch failed: {}", e.getMessage());
                 return "§c[Assistant] Import failed: " + e.getMessage();

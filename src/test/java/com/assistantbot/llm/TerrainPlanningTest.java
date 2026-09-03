@@ -8,17 +8,16 @@ import org.junit.jupiter.api.Test;
 
 class TerrainPlanningTest {
     @Test
-    void preserveModeRetainsOnlyExplicitAirAsCarveCells() {
+    void keepModeCarvesOnlyTheCellsDrawnAsAir() {
         BuildStructure structure = BuildStructure.parse("""
-                VXB-1.1
+                VXB-2
                 size 3 1 1
-                terrain_mode preserve
-                palette
-                S = stone
-                A = air
-                endpalette
-                box 0 0 0 2 0 0 S
-                set 1 0 0 A
+                terrain keep
+                pal
+                S stone
+                end
+                plan y=0
+                S.S
                 """);
 
         assertTrue(structure.shouldPreserveTerrain());
@@ -28,34 +27,36 @@ class TerrainPlanningTest {
     }
 
     @Test
-    void layerDotsRemovePlanGeometryWithoutCarvingPreservedTerrain() {
+    void anAirPaletteSymbolCarvesJustLikeADot() {
         BuildStructure structure = BuildStructure.parse("""
-                VXB-1.1
+                VXB-2
                 size 3 1 1
-                terrain_mode preserve
-                palette
-                S = stone
-                endpalette
-                box 0 0 0 2 0 0 S
-                layer y 0 z 0
-                S.S
-                endlayer
+                terrain keep
+                pal
+                S stone
+                A air
+                end
+                plan y=0
+                SAS
                 """);
 
         assertEquals(2, structure.getBlocks().size());
-        assertTrue(structure.getClearCells().isEmpty());
+        assertTrue(structure.getClearCells().contains(new BuildStructure.Cell(1, 0, 0)));
     }
 
     @Test
-    void preserveModeAllowsExcavationOnlyPlans() {
+    void keepModeAllowsExcavationOnlyPlans() {
         BuildStructure structure = BuildStructure.parse("""
-                VXB-1.1
+                VXB-2
                 size 3 3 3
-                terrain_mode preserve
-                palette
-                A = air
-                endpalette
-                box 0 0 0 2 2 2 A
+                terrain keep
+                pal
+                A air
+                end
+                plan y=0..2
+                AAA
+                AAA
+                AAA
                 """);
 
         assertTrue(structure.getBlocks().isEmpty());

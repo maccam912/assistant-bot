@@ -21,7 +21,7 @@ import java.util.function.Consumer;
 
 /**
  * HTTP client for calling an LLM via OpenRouter's OpenAI-compatible API.
- * Sends a structure description, receives VXB-1 format text, parses it into
+ * Sends a structure description, receives VXB-2 format text, parses it into
  * a BuildStructure. Runs asynchronously to avoid blocking the server thread.
  *
  * Configuration:
@@ -52,127 +52,27 @@ public class LlmClient {
     /** Path to the mounted ConfigMap file containing the model name. */
     private static final String MODEL_FILE_PATH = "/config/openrouter/openrouter-model";
 
-    private static final String SYSTEM_PROMPT_BASE = """
-            You are a Minecraft structure generator. Given a description, output a structure in VXB-1 format.
-
-            Output ONLY the VXB-1 text — no markdown fences, no explanation, no commentary.
-
-            VXB-1 FORMAT:
-            Line 1 must be EXACTLY "VXB-1". No other text should precede it.
-            Then: name, origin, size, axes (header fields).
-            Then: palette/endpalette section mapping single-char symbols to block IDs.
-            Then: build commands (box, set, layer/endlayer).
-
-            COMMANDS:
-            - box x1 y1 z1 x2 y2 z2 S — fill an inclusive cuboid with symbol S.
-            - set x y z S — place one block.
-            - layer y Y z Z0 / endlayer — 2D character grid at fixed y=Y, rows starting at z=Z0.
-              Rows are ordered by increasing z. Characters in each row are ordered by increasing x.
-              Use "." for air inside layers. Each row must have EXACTLY as many characters as the size X value.
-            - layer y Y1-Y2 z Z0 / endlayer — same as above but the grid is duplicated to every
-              Y level from Y1 to Y2 (inclusive). Use this for tall repetitive sections like walls,
-              pillars, or towers where the same cross-section repeats across many layers.
-              Example: "layer y 1-8 z 0" applies the grid to y=1, y=2, ..., y=8.
-
-            Later commands overwrite earlier ones (last-write-wins). This means you can:
-            1. Lay down a solid floor with box.
-            2. Define wall shells with layers.
-            3. Carve doors/windows by overwriting with air in later layers.
-            4. Add roof and details.
-
-            AUTHORING RULES:
-            1. Use box for any rectangle or prism larger than 2x2x2.
-            2. Use layer for irregular walls, floors with holes, or decorative patterns.
-            3. NEVER emit coordinates outside the declared size. Ensure every row in a layer has the correct length.
-            4. Use palette symbols consistently — do not invent new symbols after endpalette.
-            5. Avoid directional block states unless necessary; when necessary, hide them in the palette.
-            6. Prefer bilateral symmetry when possible.
-            7. Build from large masses to small details.
-            8. Keep structures compact on the ground (under 20x20 footprint). Height can be
-                taller — use layer Y ranges to efficiently define repeating floors.
-            9. Use short block names without "minecraft:" prefix: "dirt", "oak_planks", "stone", etc.
-                Every palette block base ID MUST appear in the authoritative allowed block list below.
-            10. y=0 is ground level. y=up, x=east, z=south.
-            11. NEVER use leaf blocks (oak_leaves, birch_leaves, etc.) as decorative elements
-                like bushes, hedges, or shrubs. Leaves decay in normal Minecraft when not
-                connected to a log within 7 blocks. Only use leaves if they are part of
-                a tree with a connected trunk.
-            12. Stained glass panes (e.g. white_stained_glass_pane) only form full flat
-                panes when they connect to adjacent panes or blocks. A single isolated
-                pane looks like a thin cross. Use at least a 2-wide span of glass panes
-                so they connect to each other and display as a proper window surface.
-            13. Use "layer y Y1-Y2 z Z0" for walls, columns, and floors that repeat
-                identically across multiple Y levels. This avoids duplicating the same
-                grid and makes tall builds feasible.
-
-            EXAMPLE (small cabin):
-            VXB-1
-            name cabin_9x7x7
-            origin 0 0 0
-            size 9 7 7
-            axes x=east y=up z=south
-
-            palette
-            . = air
-            C = cobblestone
-            P = spruce_planks
-            L = spruce_log[axis=y]
-            G = glass_pane
-            D = spruce_door[half=lower,facing=south]
-            U = spruce_door[half=upper,facing=south]
-            T = torch
-            endpalette
-
-            box 0 0 0 8 0 6 C
-
-            layer y 1 z 0
-            LPPGPGPPL
-            P.......P
-            G.......G
-            P.......P
-            G.......G
-            P.......P
-            LPPPDPPPL
-            endlayer
-
-            layer y 2 z 0
-            LPPGPGPPL
-            P.......P
-            G.......G
-            P.......P
-            G.......G
-            P.......P
-            LPPU.UPPL
-            endlayer
-
-            layer y 3 z 0
-            LPPGPGPPL
-            P.......P
-            G.......G
-            P.......P
-            G.......G
-            P.......P
-            LPPPPPPPL
-            endlayer
-
-            box 0 4 0 8 4 6 P
-            box 1 5 1 7 5 5 P
-            box 2 6 2 6 6 4 P
-
-            set 4 1 3 T""";
-
+    /**
+     * Terse stand-in used only if the packaged prompt resource cannot be read.
+     * The real prompt lives in {@code docs/vxb2-prompt.md}, which is the single
+     * source of truth shared with the repository documentation.
+     */
     private static final String SYSTEM_PROMPT_FALLBACK = """
-            Generate only a compact, buildable VXB-1.1 structure. Coordinates are local with
-            x=east, y=up, z=south; the declared size is centered horizontally on the bot.
-            Use a palette followed by box/set/layer commands, geometry primitives (sphere,
-            ellipsoid, cylinder, cone, pyramid, triangle, staircase), reusable macro/use
-            instances, and a final semantic features section. Use terrain_mode preserve plus
-            explicit air symbols for terrain-integrated excavation, or terrain_mode replace
-            for a cleared freestanding volume. Keep all coordinates inside size, connect the
-            structure to y=0 unless allow_floating is intentional, and submit through the VXB
-            tools when available. Output no reasoning, fences, or commentary.""";
+            Build Minecraft structures by drawing them in VXB-2. Every block you place is a
+            character in a grid; there are no volume or coordinate commands. Header: 'VXB-2',
+            name, 'size X Y Z', optional 'ground true|false' and 'terrain replace|keep'. Then a
+            'pal' section mapping one character to one block ID, ended by 'end'. Then slices:
+            'plan y=N' is a level from above with rows running north to south and characters
+            west to east; 'face south|north|east|west <axis>=N' is that side seen from outside,
+            rows top to bottom. Row and column counts come from 'size'. Options 'y=1..3',
+            'y=0,4' and windows such as 'x=1..7 z=1..5' narrow a slice. Slices may appear in any
+            order; where two cover the same cell they must draw the same block. '.' is air.
+            Never write block states: the compiler infers stair facings, pillar axes, door
+            hinges, torch mounting and slab halves from the drawing. Coordinates are local with
+            x=east, y=up, z=south, and the declared size is centred on the bot. Output no
+            reasoning, fences or commentary.""";
 
-    /** Canonical prompt is a resource shared with docs; the embedded VXB-1 prompt is only a fallback. */
+    /** Canonical prompt is a resource shared with docs; the embedded text is only a fallback. */
     private static final String SYSTEM_PROMPT = loadSystemPrompt();
 
     private final HttpClient httpClient;
@@ -249,7 +149,7 @@ public class LlmClient {
         reportProgress(progressListener, "validating", "checking initial text draft");
         VxbDiagnostics.DiagnosticResult firstResult = VxbDiagnostics.run(content);
 
-        if (hasNonMechanicalBlockers(firstResult)) {
+        if (firstResult.hasBlockers()) {
             AssistantMod.LOGGER.warn("First LLM attempt has diagnostics issues: blockers={}, warnings={}",
                     firstResult.hasBlockers(), firstResult.hasWarnings());
             AssistantMod.LOGGER.warn("Unparseable/imperfect LLM response body (first 500 chars): {}",
@@ -260,36 +160,36 @@ public class LlmClient {
             reportProgress(progressListener, "repairing", "asking the model to fix compiler diagnostics");
             String report = firstResult.getLlmReport();
             String repairContent = callApi(url, apiKey, model, userMessage, content,
-                    "Your previous response had the following VXB-1 compiler diagnostic errors and/or architectural warnings:\n" + report
-                            + "\nPlease output ONLY the corrected VXB-1 text, ensuring all blocker errors and warnings are resolved. Start with 'VXB-1' on the first line.");
+                    "Your previous response had the following VXB-2 compiler diagnostics:\n" + report
+                            + "\nOutput ONLY the corrected VXB-2 text with every blocker resolved. Start with 'VXB-2' on the first line.");
 
             reportProgress(progressListener, "validating repair", "checking corrected text draft");
             VxbDiagnostics.DiagnosticResult repairResult = VxbDiagnostics.run(repairContent);
-            if (hasNonMechanicalBlockers(repairResult)) {
+            if (repairResult.hasBlockers()) {
                 AssistantMod.LOGGER.error("Repair response also failed with blocker errors:\n{}", repairResult.getLlmReport());
-                throw new IllegalArgumentException("VXB-1 blocker errors persist after repair attempt:\n" + repairResult.getLlmReport());
+                throw new IllegalArgumentException("VXB-2 blocker errors persist after repair attempt:\n" + repairResult.getLlmReport());
             }
 
             try {
-                BuildStructure structure2 = parseAndMechanicallyCorrect(repairContent, repairResult);
+                BuildStructure structure2 = VxbCompiler.compile(repairContent).structure();
                 AssistantMod.LOGGER.info("LLM repair parse succeeded: {} blocks", structure2.getBlocks().size());
                 reportProgress(progressListener, "complete", "accepted repaired draft with "
                         + structure2.getBlocks().size() + " blocks");
                 return structure2;
             } catch (IllegalArgumentException repairParseError) {
                 AssistantMod.LOGGER.error("Repair response also failed to parse: {}", repairParseError.getMessage());
-                throw new IllegalArgumentException("VXB-1 repair parsing failed: " + repairParseError.getMessage());
+                throw new IllegalArgumentException("VXB-2 repair parsing failed: " + repairParseError.getMessage());
             }
         } else {
             try {
-                BuildStructure structure = parseAndMechanicallyCorrect(content, firstResult);
+                BuildStructure structure = VxbCompiler.compile(content).structure();
                 AssistantMod.LOGGER.info("LLM structure parsed successfully: {} blocks", structure.getBlocks().size());
                 reportProgress(progressListener, "complete", "accepted initial draft with "
                         + structure.getBlocks().size() + " blocks");
                 return structure;
             } catch (IllegalArgumentException parseError) {
-                AssistantMod.LOGGER.error("VXB-1 parsing failed: {}", parseError.getMessage());
-                throw new IllegalArgumentException("VXB-1 parsing failed: " + parseError.getMessage());
+                AssistantMod.LOGGER.error("VXB-2 parsing failed: {}", parseError.getMessage());
+                throw new IllegalArgumentException("VXB-2 parsing failed: " + parseError.getMessage());
             }
         }
     }
@@ -395,7 +295,7 @@ public class LlmClient {
                             reportProgress(progressListener, "inspecting", turnLabel + " — reviewing the compiled structure");
                             requireDraft(args, draftId, compiled);
                             toolResult.addProperty("draft_id", draftId);
-                            toolResult.addProperty("projection", VxbPreviewRenderer.render(compiled));
+                            toolResult.addProperty("compiled_vxb2", VxbPreviewRenderer.render(compiled));
                             if (visionReviewEnabled()) visualPreview = VxbPreviewRenderer.renderPngDataUrl(compiled);
                         }
                         case "submit_vxb" -> {
@@ -518,11 +418,11 @@ public class LlmClient {
 
     private static JsonArray buildVxbTools() {
         JsonArray tools = new JsonArray();
-        tools.add(functionTool("compile_vxb", "Compile and mechanically validate a complete VXB-1.1 draft.", "vxb",
-                "Complete VXB-1.1 source text"));
+        tools.add(functionTool("compile_vxb", "Compile and validate a complete VXB-2 draft.", "vxb",
+                "Complete VXB-2 source text"));
         tools.add(functionTool("apply_vxb_patch", "Apply a small VXP-1 numbered-line patch to the current draft and recompile it.", "patch",
                 "VXP-1 text using replace-line, delete-line, and insert-after"));
-        tools.add(functionTool("inspect_vxb", "Inspect top, front, and side projections of the accepted draft.", "draft_id",
+        tools.add(functionTool("inspect_vxb", "Redraw the accepted draft as VXB-2 slices so you can compare it against what you wrote.", "draft_id",
                 "Draft ID returned by compile_vxb"));
         tools.add(functionTool("submit_vxb", "Submit an accepted draft as the final Minecraft build plan.", "draft_id",
                 "Draft ID returned by compile_vxb"));
@@ -576,19 +476,6 @@ public class LlmClient {
 
     private static final class ToolUnavailableException extends Exception {
         ToolUnavailableException(String message) { super(message); }
-    }
-
-    private BuildStructure parseAndMechanicallyCorrect(String content, VxbDiagnostics.DiagnosticResult diagnostics) {
-        return VxbCompiler.compile(content).structure();
-    }
-
-    private static boolean hasNonMechanicalBlockers(VxbDiagnostics.DiagnosticResult result) {
-        for (VxbDiagnostics.Diagnostic diagnostic : result.getBlockers()) {
-            if (!diagnostic.checkName().equals("Invalid Minecraft Block ID")) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -731,11 +618,11 @@ public class LlmClient {
     }
 
     private static String loadSystemPrompt() {
-        try (var stream = LlmClient.class.getResourceAsStream("/vxb1-prompt.md")) {
+        try (var stream = LlmClient.class.getResourceAsStream("/vxb2-prompt.md")) {
             if (stream == null) return SYSTEM_PROMPT_FALLBACK;
             return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            AssistantMod.LOGGER.warn("Could not load /vxb1-prompt.md; using embedded fallback: {}", e.getMessage());
+            AssistantMod.LOGGER.warn("Could not load /vxb2-prompt.md; using embedded fallback: {}", e.getMessage());
             return SYSTEM_PROMPT_FALLBACK;
         }
     }

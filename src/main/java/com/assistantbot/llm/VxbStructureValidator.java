@@ -31,6 +31,31 @@ public final class VxbStructureValidator {
         validateGroundedComponents(structure, grid, result);
         validateGravityBlocks(grid, result);
         validateWalkableAccess(structure, grid, result);
+        validateIsolatedPanes(grid, result);
+    }
+
+    /** A single pane or bar floating in a wall reads as a mistake rather than a window. */
+    private static void validateIsolatedPanes(Map<Cell, BlockEntry> grid, VxbDiagnostics.DiagnosticResult result) {
+        for (Map.Entry<Cell, BlockEntry> entry : grid.entrySet()) {
+            String id = entry.getValue().blockId().toLowerCase(Locale.ROOT);
+            if (!id.contains("_pane") && !id.contains("iron_bars")) continue;
+            boolean neighbour = false;
+            for (int[] d : NEIGHBORS) {
+                Cell next = new Cell(entry.getKey().x() + d[0], entry.getKey().y() + d[1], entry.getKey().z() + d[2]);
+                BlockEntry other = grid.get(next);
+                if (other != null && other.blockId().equals(entry.getValue().blockId())) neighbour = true;
+            }
+            if (!neighbour) {
+                result.add(VxbDiagnostics.Severity.WARNING, "Isolated Window Pane",
+                        "The pane at " + format(entry.getKey()) + " has no matching pane beside it; single panes "
+                                + "read as a gap rather than a window.", null);
+            }
+        }
+    }
+
+    private static Cell firstCell(PlacementGroup group) {
+        BlockEntry block = group.blocks().getFirst();
+        return new Cell(block.x(), block.y(), block.z());
     }
 
     private static void validateExactState(BlockEntry entry, VxbDiagnostics.DiagnosticResult result) {
@@ -50,10 +75,14 @@ public final class VxbStructureValidator {
         for (PlacementGroup group : structure.getFeatureGroups()) {
             for (Cell support : group.requiredSupports()) {
                 BlockEntry supportingBlock = grid.get(support);
-                if (supportingBlock == null || !isLikelySolid(supportingBlock.blockId())) {
-                    result.add(VxbDiagnostics.Severity.BLOCKER, "Missing Feature Support",
-                            "Feature " + group.id() + " (" + group.kind() + ") requires a solid block at " + format(support), null);
-                }
+                if (supportingBlock != null && isLikelySolid(supportingBlock.blockId())) continue;
+                // Under 'terrain keep' the missing support may simply be untouched world terrain,
+                // which the plan is allowed to lean on, so that case is advisory rather than fatal.
+                VxbDiagnostics.Severity severity = structure.shouldPreserveTerrain()
+                        ? VxbDiagnostics.Severity.WARNING : VxbDiagnostics.Severity.BLOCKER;
+                result.add(severity, "Missing Fixture Support",
+                        "The " + group.kind() + " at " + format(firstCell(group)) + " needs a solid block at "
+                                + format(support) + ". Draw one there, or move the fixture against a wall.", null);
             }
         }
     }
@@ -98,7 +127,7 @@ public final class VxbStructureValidator {
         }
         result.add(VxbDiagnostics.Severity.BLOCKER, "Ungrounded Structure Component",
                 (grid.size() - reached.size()) + " blocks in " + components + " component(s) are not connected to y=0; example "
-                        + format(example) + ". Use 'allow_floating true' only when intentional.", null);
+                        + format(example) + ". Draw something connecting it down, or set 'ground false' if it is meant to float.", null);
     }
 
     private static void validateFeatureClearance(BuildStructure structure, Map<Cell, BlockEntry> grid,
@@ -114,20 +143,15 @@ public final class VxbStructureValidator {
                                 lower.z() + outside[1] * sign);
                         if (inside(structure, clearance) && grid.containsKey(clearance)) {
                             result.add(VxbDiagnostics.Severity.BLOCKER, "Blocked Doorway",
-                                    "Door " + group.id() + " needs two-block clearance on both sides; occupied " + format(clearance), null);
+                                    "The door at " + format(firstCell(group)) + " is blocked by a block at "
+                                            + format(clearance) + "; a doorway needs two blocks of headroom on both sides.", null);
                         }
                     }
-                }
-            } else if (group.kind().equals("stair")) {
-                BlockEntry stair = group.blocks().getFirst();
-                Cell headroom = new Cell(stair.x(), stair.y() + 1, stair.z());
-                if (inside(structure, headroom) && grid.containsKey(headroom)) {
-                    result.add(VxbDiagnostics.Severity.BLOCKER, "Blocked Stair Headroom",
-                            "Stair " + group.id() + " has a block directly above it at " + format(headroom), null);
                 }
             }
         }
     }
+
 
     private static void validateGravityBlocks(Map<Cell, BlockEntry> grid, VxbDiagnostics.DiagnosticResult result) {
         for (Map.Entry<Cell, BlockEntry> entry : grid.entrySet()) {

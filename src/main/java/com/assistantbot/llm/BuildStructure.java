@@ -1,16 +1,16 @@
 package com.assistantbot.llm;
 
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
- * Represents a structure returned by the LLM in VXB-1 format: a list of block
- * entries with relative coordinates. Parses the VXB-1 text format which uses
- * palette symbols, box/set primitives, and layer grids with last-write-wins
- * semantics.
+ * A compiled structure: block entries in coordinates local to the build origin,
+ * plus the placement groups and excavation cells the executor needs.
  *
- * @see <a href="../../minecraft_vxb_spec.md">VXB-1 specification</a>
+ * <p>This is the format-independent result. VXB-2 source reaches it through
+ * {@link Vxb2Parser} and {@link Vxb2Inference}; everything downstream — plan
+ * storage, build execution, preview rendering — works from this class alone.
+ *
+ * @see <a href="../../minecraft_vxb_spec.md">VXB-2 specification</a>
  */
 public class BuildStructure {
 
@@ -40,6 +40,9 @@ public class BuildStructure {
     private final boolean allowFloating;
     private final boolean preserveTerrain;
     private VxbDiagnostics.DiagnosticResult diagnostics;
+    private String name = "structure";
+    private List<String> notes = List.of();
+    private Map<String, Character> glyphs = Map.of();
 
     public BuildStructure(List<BlockEntry> blocks, Map<String, Integer> materials) {
         this(blocks, materials, List.of(), Set.of(), -1, -1, -1, false, false);
@@ -72,6 +75,11 @@ public class BuildStructure {
     public boolean isFloatingAllowed() { return allowFloating; }
     public boolean shouldPreserveTerrain() { return preserveTerrain; }
     public void setDiagnostics(VxbDiagnostics.DiagnosticResult diagnostics) { this.diagnostics = diagnostics; }
+    public String getName() { return name; }
+    /** Non-fatal things the compiler decided for the author, surfaced as warnings. */
+    public List<String> getNotes() { return notes; }
+    /** Palette symbol per base block ID, so a compiled build can be echoed back as VXB-2 slices. */
+    public Map<String, Character> getGlyphs() { return glyphs; }
 
     /**
      * Returns all unique block IDs used in the structure.
@@ -103,378 +111,55 @@ public class BuildStructure {
         }
     }
 
-    // --- VXB-1 Parser ---
-
-    private static final Pattern BOX_PATTERN = Pattern.compile(
-            "^box\\s+(-?\\d+)\\s+(-?\\d+)\\s+(-?\\d+)\\s+(-?\\d+)\\s+(-?\\d+)\\s+(-?\\d+)\\s+(\\S)$");
-    private static final Pattern SET_PATTERN = Pattern.compile(
-            "^set\\s+(-?\\d+)\\s+(-?\\d+)\\s+(-?\\d+)\\s+(\\S)$");
-    private static final Pattern LAYER_PATTERN = Pattern.compile(
-            "^layer\\s+y\\s+(-?\\d+)(?:\\s*-\\s*(-?\\d+))?\\s+z\\s+(-?\\d+)$");
-    private static final Pattern SIZE_PATTERN = Pattern.compile(
-            "^size\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)$");
-    private static final Pattern ORIGIN_PATTERN = Pattern.compile(
-            "^origin\\s+(-?\\d+)\\s+(-?\\d+)\\s+(-?\\d+)$");
+    // --- VXB-2 parsing ---
 
     /**
-     * Parse a VXB-1 format string into a BuildStructure. The format uses:
-     * <ul>
-     *   <li>{@code palette}/{@code endpalette} — symbol-to-block-ID mapping</li>
-     *   <li>{@code box x1 y1 z1 x2 y2 z2 S} — inclusive cuboid fill</li>
-     *   <li>{@code set x y z S} — single block placement</li>
-     *   <li>{@code layer y Y z Z0}/{@code endlayer} — 2D character grid at fixed Y</li>
-     *   <li>{@code layer y Y1-Y2 z Z0}/{@code endlayer} — 2D grid duplicated across Y range</li>
-     * </ul>
-     * Later commands overwrite earlier ones (last-write-wins).
+     * Compiles VXB-2 source into a concrete block list.
      *
-     * @param vxb the VXB-1 text content (may include leading/trailing whitespace or
-     *            markdown code fences which are stripped)
-     * @return parsed BuildStructure
-     * @throws IllegalArgumentException if the format is invalid
+     * <p>The work splits in two: {@link Vxb2Parser} turns the drawn slices into a
+     * glyph grid, and {@link Vxb2Inference} turns that grid into exact block
+     * states. Between the two, palette block IDs are repaired against the live
+     * server registry so that a near-miss name never reaches state inference.
      */
     public static BuildStructure parse(String vxb) {
-        VxbFeatureCompiler.Expansion expansion = VxbFeatureCompiler.expand(vxb);
-        vxb = expansion.vxb();
-        // Strip markdown code fences if the LLM wrapped the output
-        String cleaned = stripCodeFences(vxb).trim();
+        Vxb2Parser.Parsed parsed = Vxb2Parser.parse(vxb);
+        List<String> notes = new ArrayList<>(parsed.notes());
 
-        // Normalize Unicode dash variants (en dash, em dash, minus sign) to hyphen-minus.
-        // Some LLMs (e.g., Gemini Flash) emit these in range syntax like "layer y 1–12".
-        cleaned = normalizeDashes(cleaned);
-
-        if (cleaned.isEmpty()) {
-            throw new IllegalArgumentException("Empty VXB-1 input");
+        Map<String, String> repairs = BlockIdResolver.mechanicalReplacements(new HashSet<>(parsed.palette().values()));
+        Map<Character, String> palette = new LinkedHashMap<>();
+        for (Map.Entry<Character, String> entry : parsed.palette().entrySet()) {
+            String repaired = repairs.get(entry.getValue());
+            if (repaired == null) {
+                palette.put(entry.getKey(), entry.getValue());
+            } else {
+                palette.put(entry.getKey(), repaired);
+                notes.add("Palette '" + entry.getKey() + "' was corrected from " + entry.getValue()
+                        + " to the closest registry block " + repaired + ".");
+            }
         }
 
-        String[] lines = cleaned.split("\\r?\\n");
+        Vxb2Parser.Parsed resolved = new Vxb2Parser.Parsed(parsed.name(), parsed.sizeX(), parsed.sizeY(),
+                parsed.sizeZ(), parsed.ground(), parsed.preserveTerrain(), palette, parsed.hints(), parsed.grid(), notes);
+        Vxb2Inference.Result inferred = Vxb2Inference.infer(resolved);
 
-        // Validate header (skip potential junk before VXB-1)
-        int headerLineIdx = -1;
-        for (int i = 0; i < lines.length; i++) {
-            String trimmed = lines[i].trim();
-            if (trimmed.isEmpty() || trimmed.startsWith("#")) continue;
-            if (trimmed.equals("VXB-1")) {
-                headerLineIdx = i;
-                break;
-            }
-            // If we find something else first, it's not a valid VXB-1
-            break; 
+        if (inferred.blocks().isEmpty() && inferred.clearCells().isEmpty()) {
+            throw new IllegalArgumentException("VXB-2 parsed but every drawn cell was air.");
         }
 
-        if (headerLineIdx == -1) {
-            throw new IllegalArgumentException(
-                    "Missing VXB-1 header. First non-comment line must be 'VXB-1'.");
-        }
-
-        // State
-        Map<Character, String> palette = new HashMap<>();
-        int sizeX = -1, sizeY = -1, sizeZ = -1;
-        boolean hasBounds = false;
-        boolean preserveTerrain = false;
-
-        // Use a position map for last-write-wins semantics
-        // key = packed position, value = block ID
-        Map<Long, String> positionMap = new LinkedHashMap<>();
-
-        boolean inPalette = false;
-        boolean inLayer = false;
-        int layerYMin = 0;
-        int layerYMax = 0; // inclusive; same as layerYMin for single-Y layers
-        int layerZ0 = 0;
-        int currentLayerRow = 0;
-
-        for (int lineNum = headerLineIdx + 1; lineNum < lines.length; lineNum++) {
-            String raw = lines[lineNum];
-            String line = raw.trim();
-
-            // Skip blank lines and comments
-            if (line.isEmpty() || line.startsWith("#")) continue;
-
-            // --- Palette section ---
-            if (line.equals("palette")) {
-                inPalette = true;
-                continue;
-            }
-            if (line.equals("endpalette")) {
-                inPalette = false;
-                if (palette.isEmpty()) {
-                    throw new IllegalArgumentException("Empty palette section");
-                }
-                continue;
-            }
-            if (inPalette) {
-                parsePaletteEntry(line, palette, lineNum);
-                continue;
-            }
-
-            // --- Layer section ---
-            if (line.equals("endlayer")) {
-                inLayer = false;
-                continue;
-            }
-            if (inLayer) {
-                // Each line in a layer is a row of symbols at z = layerZ0 + currentLayerRow
-                // Applied to all Y values in the range [layerYMin, layerYMax]
-                int z = layerZ0 + currentLayerRow;
-                for (int yi = layerYMin; yi <= layerYMax; yi++) {
-                    // Lenient row length: use sizeX if available, otherwise use line length
-                    int cols = (hasBounds) ? Math.min(line.length(), sizeX) : line.length();
-                    for (int xi = 0; xi < cols; xi++) {
-                        char ch = line.charAt(xi);
-                        if (ch == '.' || ch == '-' || ch == ' ') {
-                            // Air — remove any previously placed block at this position
-                            // (last-write-wins: explicitly writing air clears the cell)
-                            positionMap.remove(packPos(xi, yi, z));
-                            continue;
-                        }
-                        String blockId = palette.get(ch);
-                        if (blockId == null) {
-                            // Last-ditch effort: if it's an unrecognized symbol, treat as air rather than crashing
-                            positionMap.remove(packPos(xi, yi, z));
-                            continue;
-                        }
-                        if (hasBounds && (xi >= sizeX || yi < 0 || yi >= sizeY || z < 0 || z >= sizeZ)) {
-                            // Skip out of bounds but don't crash
-                            continue;
-                        }
-                        positionMap.put(packPos(xi, yi, z), blockId);
-                    }
-                }
-                currentLayerRow++;
-                continue;
-            }
-
-            // --- Non-section commands ---
-
-            // name (ignored, informational)
-            if (line.startsWith("name ")) continue;
-
-            // axes (ignored, we always use x=east y=up z=south)
-            if (line.startsWith("axes ")) continue;
-
-            // origin
-            Matcher originMatch = ORIGIN_PATTERN.matcher(line);
-            if (originMatch.matches()) {
-                // Origin is informational — the actual world-space anchor is provided by
-                // BuildTask. We parse but don't use it (build is always relative).
-                continue;
-            }
-
-            if (line.equals("terrain_mode preserve")) {
-                preserveTerrain = true;
-                continue;
-            }
-            if (line.equals("terrain_mode replace")) {
-                preserveTerrain = false;
-                continue;
-            }
-            if (line.startsWith("terrain_mode ")) {
-                throw new IllegalArgumentException("terrain_mode must be replace or preserve");
-            }
-
-            // size
-            Matcher sizeMatch = SIZE_PATTERN.matcher(line);
-            if (sizeMatch.matches()) {
-                sizeX = Integer.parseInt(sizeMatch.group(1));
-                sizeY = Integer.parseInt(sizeMatch.group(2));
-                sizeZ = Integer.parseInt(sizeMatch.group(3));
-                hasBounds = true;
-                continue;
-            }
-
-            // box
-            Matcher boxMatch = BOX_PATTERN.matcher(line);
-            if (boxMatch.matches()) {
-                int x1 = Integer.parseInt(boxMatch.group(1));
-                int y1 = Integer.parseInt(boxMatch.group(2));
-                int z1 = Integer.parseInt(boxMatch.group(3));
-                int x2 = Integer.parseInt(boxMatch.group(4));
-                int y2 = Integer.parseInt(boxMatch.group(5));
-                int z2 = Integer.parseInt(boxMatch.group(6));
-                char sym = boxMatch.group(7).charAt(0);
-
-                String blockId = palette.get(sym);
-                if (blockId == null) {
-                    throw new IllegalArgumentException(
-                            "Line " + (lineNum + 1) + ": undefined palette symbol '" + sym + "' in box command");
-                }
-
-                // Normalize so x1<=x2, y1<=y2, z1<=z2
-                int minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
-                int minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
-                int minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2);
-
-                if (hasBounds) {
-                    if (maxX >= sizeX || maxY >= sizeY || maxZ >= sizeZ || minX < 0 || minY < 0 || minZ < 0) {
-                        throw new IllegalArgumentException(
-                                "Line " + (lineNum + 1) + ": box coordinates out of declared size bounds");
-                    }
-                }
-
-                for (int y = minY; y <= maxY; y++) {
-                    for (int z = minZ; z <= maxZ; z++) {
-                        for (int x = minX; x <= maxX; x++) {
-                            positionMap.put(packPos(x, y, z), blockId);
-                        }
-                    }
-                }
-                continue;
-            }
-
-            // set
-            Matcher setMatch = SET_PATTERN.matcher(line);
-            if (setMatch.matches()) {
-                int x = Integer.parseInt(setMatch.group(1));
-                int y = Integer.parseInt(setMatch.group(2));
-                int z = Integer.parseInt(setMatch.group(3));
-                char sym = setMatch.group(4).charAt(0);
-
-                String blockId = palette.get(sym);
-                if (blockId == null) {
-                    throw new IllegalArgumentException(
-                            "Line " + (lineNum + 1) + ": undefined palette symbol '" + sym + "' in set command");
-                }
-
-                if (hasBounds && (x < 0 || x >= sizeX || y < 0 || y >= sizeY || z < 0 || z >= sizeZ)) {
-                    throw new IllegalArgumentException(
-                            "Line " + (lineNum + 1) + ": set coordinate (" + x + "," + y + "," + z
-                                    + ") out of declared size bounds");
-                }
-
-                positionMap.put(packPos(x, y, z), blockId);
-                continue;
-            }
-
-            // layer (single Y or Y range)
-            Matcher layerMatch = LAYER_PATTERN.matcher(line);
-            if (layerMatch.matches()) {
-                int y1 = Integer.parseInt(layerMatch.group(1));
-                String y2Str = layerMatch.group(2); // null if single Y
-                int y2 = (y2Str != null) ? Integer.parseInt(y2Str) : y1;
-                layerYMin = Math.min(y1, y2);
-                layerYMax = Math.max(y1, y2);
-                layerZ0 = Integer.parseInt(layerMatch.group(3));
-                currentLayerRow = 0;
-                inLayer = true;
-                continue;
-            }
-
-            // Unknown line — skip with warning (lenient parsing for LLM output)
-            // Don't throw; LLMs sometimes emit extra commentary lines
-        }
-
-        if (inPalette) {
-            throw new IllegalArgumentException("Unterminated palette section (missing 'endpalette')");
-        }
-        if (inLayer) {
-            throw new IllegalArgumentException("Unterminated layer section (missing 'endlayer')");
-        }
-
-        if (palette.isEmpty()) {
-            throw new IllegalArgumentException("No palette defined in VXB-1 input");
-        }
-
-        // Convert position map to block entries and compute materials
-        List<BlockEntry> blocks = new ArrayList<>();
         Map<String, Integer> materials = new HashMap<>();
-        Set<Cell> clearCells = new HashSet<>();
+        for (BlockEntry block : inferred.blocks()) materials.merge(block.blockId(), 1, Integer::sum);
 
-        for (Map.Entry<Long, String> entry : positionMap.entrySet()) {
-            long packed = entry.getKey();
-            String blockId = entry.getValue();
-            // Skip air blocks — the build volume is already cleared before placing,
-            // so air entries become an explicit clear mask rather than placement work.
-            if (blockId.equals("minecraft:air") || blockId.equals("air")) {
-                int[] coords = unpackPos(packed);
-                clearCells.add(new Cell(coords[0], coords[1], coords[2]));
-                continue;
-            }
-            int[] coords = unpackPos(packed);
-            blocks.add(new BlockEntry(coords[0], coords[1], coords[2], blockId));
-            materials.merge(blockId, 1, Integer::sum);
+        BuildStructure structure = new BuildStructure(new ArrayList<>(inferred.blocks()), materials,
+                inferred.groups(), inferred.clearCells(), parsed.sizeX(), parsed.sizeY(), parsed.sizeZ(),
+                !parsed.ground(), parsed.preserveTerrain());
+        structure.name = parsed.name();
+        structure.notes = List.copyOf(inferred.notes());
+        Map<String, Character> glyphs = new LinkedHashMap<>();
+        for (Map.Entry<Character, String> entry : palette.entrySet()) {
+            glyphs.putIfAbsent(BlockIdResolver.normalizeBaseId(entry.getValue()), entry.getKey());
         }
-
-        if (blocks.isEmpty() && clearCells.isEmpty()) {
-            throw new IllegalArgumentException("VXB-1 parsed successfully but produced no blocks or explicit excavation cells");
-        }
-
-        return new BuildStructure(blocks, materials, expansion.groups(), clearCells,
-                sizeX, sizeY, sizeZ, expansion.allowFloating(), preserveTerrain);
-    }
-
-    /**
-     * Parse a single palette entry like ". = minecraft:air" or "C = cobblestone".
-     */
-    private static void parsePaletteEntry(String line, Map<Character, String> palette, int lineNum) {
-        // Expected: "X = block_id" or "X = minecraft:block_id[state=value]"
-        // Flexible: allow varying whitespace around '='
-        int eqIdx = line.indexOf('=');
-        if (eqIdx < 0) {
-            throw new IllegalArgumentException(
-                    "Line " + (lineNum + 1) + ": palette entry missing '=': " + line);
-        }
-
-        String keyPart = line.substring(0, eqIdx).trim();
-        String valuePart = line.substring(eqIdx + 1).trim();
-
-        if (keyPart.length() != 1) {
-            throw new IllegalArgumentException(
-                    "Line " + (lineNum + 1) + ": palette key must be a single character, got: '" + keyPart + "'");
-        }
-
-        if (valuePart.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Line " + (lineNum + 1) + ": palette entry has empty block ID");
-        }
-
-        char symbol = keyPart.charAt(0);
-        String blockId = ensureNamespace(valuePart);
-
-        // Allow air in the palette (it's used by '.' convention but could be mapped to other symbols too)
-        palette.put(symbol, blockId);
-    }
-
-    /**
-     * Normalize Unicode dash-like characters to ASCII hyphen-minus.
-     * LLMs sometimes emit en dash (U+2013), em dash (U+2014), or
-     * minus sign (U+2212) instead of hyphen-minus (U+002D).
-     */
-    private static String normalizeDashes(String input) {
-        return input.replace('\u2013', '-')  // en dash
-                    .replace('\u2014', '-')  // em dash
-                    .replace('\u2212', '-'); // minus sign
-    }
-
-    /**
-     * Strip markdown code fences that LLMs sometimes wrap around their output.
-     * Handles ```text, ```vxb, ```, etc.
-     */
-    private static String stripCodeFences(String input) {
-        String s = input.trim();
-        // Strip leading fence: ```anything\n
-        if (s.startsWith("```")) {
-            int newline = s.indexOf('\n');
-            if (newline >= 0) {
-                s = s.substring(newline + 1);
-            }
-        }
-        // Strip trailing fence: \n```
-        if (s.endsWith("```")) {
-            int lastNewline = s.lastIndexOf('\n');
-            if (lastNewline >= 0 && s.substring(lastNewline + 1).trim().equals("```")) {
-                s = s.substring(0, lastNewline);
-            }
-        }
-        return s;
-    }
-
-    /**
-     * Ensure a block name has the "minecraft:" namespace prefix.
-     * Preserves block state syntax like "spruce_log[axis=y]".
-     */
-    private static String ensureNamespace(String name) {
-        if (name.contains(":")) return name;
-        return "minecraft:" + name;
+        structure.glyphs = Map.copyOf(glyphs);
+        return structure;
     }
 
     /**
@@ -542,7 +227,7 @@ public class BuildStructure {
 
     /**
      * Compile flattened voxels into executable operations while preserving semantic fixtures.
-     * Ordinary VXB-1 doors are also paired so legacy imports gain atomic placement.
+     * Plain door blocks are paired here too, so any door reaches the world atomically.
      */
     public static List<PlacementGroup> planPlacementGroups(BuildStructure structure) {
         Set<Long> semanticCells = new HashSet<>();

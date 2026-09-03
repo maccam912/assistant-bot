@@ -21,7 +21,7 @@ dependencies {
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
     testImplementation "org.junit.jupiter:junit-jupiter:5.13.4"
-    testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.13.4"
+    testImplementation "org.junit.platform:junit-platform-launcher:1.13.4"
 }
 
 processResources {
