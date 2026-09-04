@@ -30,6 +30,7 @@ public final class BotMenu {
     private static final int SLOT_DISMISS = 1;
     private static final int SLOT_FOLLOW = 2;
     private static final int SLOT_STOP = 3;
+    private static final int SLOT_UNDO = 4;
     private static final int SLOT_BUILD = 5;
     private static final int SLOT_STATUS = 6;
 
@@ -44,6 +45,7 @@ public final class BotMenu {
         inventory.setItem(SLOT_DISMISS, button(Items.CONCRETE.red(), "§c✖ Dismiss Bot", "Send your bot away"));
         inventory.setItem(SLOT_FOLLOW, button(Items.ARROW, "§a➜ Follow Me", "Bot follows you around"));
         inventory.setItem(SLOT_STOP, button(Items.REDSTONE_BLOCK, "§e■ Stop / Wait", "Bot stands still"));
+        inventory.setItem(SLOT_UNDO, button(Items.CLOCK, "§6↶ Undo Build", "Restore the world from before the latest build"));
         inventory.setItem(SLOT_BUILD, button(Items.CRAFTING_TABLE, "§b⚒ Build…", "Type what to build"));
         inventory.setItem(SLOT_STATUS, button(Items.COMPASS, "§f? Status", "What is the bot doing?"));
 
@@ -83,6 +85,7 @@ public final class BotMenu {
                 case SLOT_DISMISS -> BotActions.dismiss(sp);
                 case SLOT_FOLLOW -> BotActions.follow(sp);
                 case SLOT_STOP -> BotActions.stop(sp);
+                case SLOT_UNDO -> BotActions.undo(sp);
                 case SLOT_STATUS -> BotActions.status(sp);
                 case SLOT_BUILD ->
                     // Defer so we finish handling this click before swapping screens.

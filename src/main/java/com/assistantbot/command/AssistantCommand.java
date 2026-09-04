@@ -51,6 +51,7 @@ import net.minecraft.server.level.ServerPlayer;
  *   dismiss                 — remove the bot
  *   follow | come           — bot follows the target player
  *   stop                    — bot goes idle
+ *   undo                    — restore the world from before the latest build
  *   mine <pos>              — mine block at position
  *   place <block> <pos>    — place block
  *   deposit                 — deposit inventory into nearest container
@@ -91,6 +92,8 @@ public class AssistantCommand {
                     .executes(AssistantCommand::follow))
                 .then(Commands.literal("stop")
                     .executes(AssistantCommand::stop))
+                .then(Commands.literal("undo")
+                    .executes(AssistantCommand::undo))
                 .then(Commands.literal("mine")
                     .then(Commands.argument("pos", BlockPosArgument.blockPos())
                         .executes(AssistantCommand::mine)))
@@ -182,6 +185,14 @@ public class AssistantCommand {
         if (player == null) return 0;
 
         BotActions.stop(player);
+        return 1;
+    }
+
+    private static int undo(CommandContext<CommandSourceStack> ctx) {
+        ServerPlayer player = resolveTarget(ctx);
+        if (player == null) return 0;
+
+        BotActions.undo(player);
         return 1;
     }
 

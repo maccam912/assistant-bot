@@ -10,10 +10,22 @@ import com.assistantbot.llm.BuildStructure.Cell;
 import com.assistantbot.llm.BuildStructure.PlacementGroup;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class Vxb2CompilerTest {
+
+    @Test
+    void repairedHogwartsDraftCompiles() throws IOException {
+        String source = Files.readString(
+                Path.of("examples/repaired/hogwarts_castle_and_movie_grounds.vxb"), StandardCharsets.UTF_8);
+        VxbCompiler.Compilation compilation = VxbCompiler.compile(source);
+        assertFalse(compilation.diagnostics().hasBlockers(), compilation.diagnostics().getLlmReport());
+        assertTrue(compilation.structure().getBlocks().size() > 1_000,
+                "The repaired full-scale structure must not collapse to a tiny prototype");
+    }
 
     @Test
     void geminiCastleFromFailureLogGetsPastRecoverableTextMistakes() throws IOException {
@@ -191,6 +203,22 @@ class Vxb2CompilerTest {
     }
 
     @Test
+    void airIsSparseInReplaceModeButRemainsExplicitInKeepMode() {
+        String source = """
+                VXB-2
+                size 2 1 1
+                %s
+                pal
+                S stone
+                end
+                plan y=0
+                .S
+                """;
+        assertEquals(1, Vxb2Parser.parse(source.formatted("")).grid().size());
+        assertEquals(2, Vxb2Parser.parse(source.formatted("terrain keep")).grid().size());
+    }
+
+    @Test
     void missingAndExtraTrailingAirAreCorrectedWithoutMovingDrawnCells() {
         VxbCompiler.Compilation compilation = VxbCompiler.compile("""
                 VXB-2
@@ -236,6 +264,23 @@ class Vxb2CompilerTest {
                 """);
         assertEquals(3, structure.getBlocks().size());
         assertTrue(structure.getBlocks().stream().allMatch(block -> block.blockId().equals("minecraft:oak_fence")));
+    }
+
+    @Test
+    void equalsIsAValidPaletteGlyphAndSpacesAreVisualSeparators() {
+        BuildStructure structure = BuildStructure.parse("""
+                VXB-2
+                size 3 1 1
+                pal
+                = smooth_stone_slab
+                S stone
+                end
+                plan y=0
+                = S =
+                """);
+        assertEquals(3, structure.getBlocks().size());
+        assertEquals("minecraft:smooth_stone_slab[type=bottom]", at(structure, 0, 0, 0).blockId());
+        assertEquals("minecraft:stone", at(structure, 1, 0, 0).blockId());
     }
 
     @Test
@@ -364,6 +409,60 @@ class Vxb2CompilerTest {
     }
 
     @Test
+    void aPartCanBePlacedBeforeItsDefinition() {
+        BuildStructure structure = BuildStructure.parse("""
+                VXB-2
+                size 1 1 1
+                pal
+                S stone
+                end
+                at 0 0 0 late_part
+                part late_part 1 1 1
+                plan y=0
+                S
+                end
+                """);
+        assertEquals("minecraft:stone", at(structure, 0, 0, 0).blockId());
+    }
+
+    @Test
+    void partAirIsTransparentAndPartBlocksStampOverTheMainStructure() {
+        BuildStructure structure = BuildStructure.parse("""
+                VXB-2
+                size 2 1 1
+                pal
+                S stone
+                F oak_planks
+                end
+                plan y=0
+                SS
+                part furnishing 2 1 1
+                plan y=0
+                .F
+                end
+                at 0 0 0 furnishing
+                """);
+        assertEquals("minecraft:stone", at(structure, 0, 0, 0).blockId());
+        assertEquals("minecraft:oak_planks", at(structure, 1, 0, 0).blockId());
+    }
+
+    @Test
+    void anUnusedEmptyPartDoesNotInvalidateTheBuild() {
+        BuildStructure structure = BuildStructure.parse("""
+                VXB-2
+                size 1 1 1
+                pal
+                S stone
+                end
+                plan y=0
+                S
+                part unfinished 1 1 1
+                end
+                """);
+        assertEquals(1, structure.getBlocks().size());
+    }
+
+    @Test
     void floatingGeometryNeedsAnExplicitGroundFalse() {
         String floating = """
                 VXB-2
@@ -454,7 +553,7 @@ class Vxb2CompilerTest {
                         plan y=1
                         *
                         """));
-        assertTrue(error.getMessage().contains("[line 8] Missing Fixture Support"), error.getMessage());
+        assertTrue(error.getMessage().contains("[line 10] Missing Fixture Support"), error.getMessage());
         assertTrue(error.getMessage().contains("The torch at (0,1,0)"), error.getMessage());
     }
 

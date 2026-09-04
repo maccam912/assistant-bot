@@ -65,6 +65,7 @@ public class BuildTask implements BotTask {
     private int totalSkipped;
     private int finalizeBlockIndex;
     private final BuildRateLimiter rateLimiter;
+    private BuildUndoSnapshot undoSnapshot;
 
     // Clearing state
     private BlockPos clearMin;
@@ -95,6 +96,7 @@ public class BuildTask implements BotTask {
         sortedBlocks = plan.getSortedBlocks();
         placementGroups = plan.getPlacementGroups();
         originPos = centeredOrigin(centerPos, plan);
+        undoSnapshot = bot.beginBuildUndo();
         currentOperationIndex = 0;
         totalPlaced = 0;
         totalSkipped = 0;
@@ -193,6 +195,7 @@ public class BuildTask implements BotTask {
             for (int z = clearMin.getZ(); z <= clearMax.getZ(); z++) {
                 BlockPos pos = new BlockPos(x, clearCurrentY, z);
                 if (!world.getBlockState(pos).isAir()) {
+                    undoSnapshot.capture(pos);
                     world.setBlock(pos, air, Block.UPDATE_ALL);
                     totalCleared++;
                 }
@@ -219,6 +222,7 @@ public class BuildTask implements BotTask {
             Cell cell = clearCells.get(clearCellIndex++);
             BlockPos pos = originPos.offset(new Vec3i(cell.x(), cell.y(), cell.z()));
             if (!world.getBlockState(pos).isAir()) {
+                undoSnapshot.capture(pos);
                 world.setBlock(pos, air, Block.UPDATE_ALL);
                 totalCleared++;
             }
@@ -398,6 +402,7 @@ public class BuildTask implements BotTask {
         }
 
         for (int i = 0; i < positions.size(); i++) {
+            undoSnapshot.capture(positions.get(i));
             if (!world.setBlock(positions.get(i), states.get(i), Block.UPDATE_CLIENTS)) return false;
         }
         for (BlockPos pos : positions) {
@@ -472,6 +477,7 @@ public class BuildTask implements BotTask {
             AssistantMod.LOGGER.warn("Invalid block state '{}': {}", blockId, e.getMessage());
             return false;
         }
+        undoSnapshot.capture(pos);
         boolean success = world.setBlock(pos, state, Block.UPDATE_ALL);
 
         if (success) {

@@ -3,7 +3,6 @@ package com.assistantbot.llm;
 import com.assistantbot.llm.BuildStructure.BlockEntry;
 import com.assistantbot.llm.BuildStructure.Cell;
 import com.assistantbot.llm.BuildStructure.PlacementGroup;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -64,7 +63,7 @@ public final class Vxb2Inference {
         }
 
         Grid grid = new Grid(base, parsed.sizeX(), parsed.sizeY(), parsed.sizeZ());
-        Set<Cell> exterior = floodExterior(grid);
+        Exterior exterior = floodExterior(grid);
 
         Map<Cell, String> resolved = new LinkedHashMap<>();
         List<PlacementGroup> groups = new ArrayList<>();
@@ -159,7 +158,7 @@ public final class Vxb2Inference {
 
     // --- multi-cell fixtures --------------------------------------------------
 
-    private static int resolveDoors(Grid grid, Set<Cell> exterior, Map<Cell, Map<String, String>> cellHints,
+    private static int resolveDoors(Grid grid, Exterior exterior, Map<Cell, Map<String, String>> cellHints,
                                     Map<Cell, String> resolved, List<PlacementGroup> groups, Set<Cell> consumed,
                                     List<String> notes, int groupIndex) {
         List<Cell> doorCells = new ArrayList<>();
@@ -384,7 +383,7 @@ public final class Vxb2Inference {
      * to say which side is outdoors, flood the air around the build: the side that
      * reaches open sky is the exterior.
      */
-    private static String doorOutside(Grid grid, Set<Cell> exterior, Cell lower) {
+    private static String doorOutside(Grid grid, Exterior exterior, Cell lower) {
         List<String> open = new ArrayList<>();
         for (String direction : HORIZONTAL) {
             if (!grid.isSolid(step(lower, direction))) open.add(direction);
@@ -405,7 +404,7 @@ public final class Vxb2Inference {
         return grid.isSolid(right) && !grid.isSolid(left) ? "right" : "left";
     }
 
-    private static String outwardFacing(Grid grid, Set<Cell> exterior, Cell cell) {
+    private static String outwardFacing(Grid grid, Exterior exterior, Cell cell) {
         String fallback = null;
         for (String direction : HORIZONTAL) {
             Cell front = step(cell, direction);
@@ -427,27 +426,77 @@ public final class Vxb2Inference {
         return null;
     }
 
-    private static Set<Cell> floodExterior(Grid grid) {
-        Set<Cell> exterior = new HashSet<>();
-        ArrayDeque<Cell> queue = new ArrayDeque<>();
-        Cell start = new Cell(-1, -1, -1);
-        exterior.add(start);
-        queue.add(start);
-        int[][] steps = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
-        while (!queue.isEmpty()) {
-            Cell current = queue.remove();
-            for (int[] offset : steps) {
-                Cell next = new Cell(current.x() + offset[0], current.y() + offset[1], current.z() + offset[2]);
-                if (next.x() < -1 || next.y() < -1 || next.z() < -1
-                        || next.x() > grid.sizeX() || next.y() > grid.sizeY() || next.z() > grid.sizeZ()) continue;
-                // Any drawn block seals the flood, doors and panes included: an opening
-                // that a player can walk through is still a wall as far as "which side is
-                // outdoors" is concerned.
-                if (grid.get(next) != null || !exterior.add(next)) continue;
-                queue.add(next);
+    private static Exterior floodExterior(Grid grid) {
+        Exterior exterior = new Exterior(grid.sizeX(), grid.sizeY(), grid.sizeZ());
+        for (Cell cell : grid.cells()) exterior.markSolid(cell);
+        exterior.flood();
+        return exterior;
+    }
+
+    /**
+     * Compact padded-volume flood map. A HashSet of millions of temporary Cell
+     * records made full-scale builds run out of heap even though the same data is
+     * only one byte per voxel. The byte array and primitive queue keep a 256×100×240
+     * build comfortably small while preserving identical exterior semantics.
+     */
+    private static final class Exterior {
+        private final int xSize;
+        private final int ySize;
+        private final int zSize;
+        private final int xStride;
+        private final int yStride;
+        private final byte[] cells; // 0=unknown air, 1=solid, 2=exterior air
+
+        Exterior(int sizeX, int sizeY, int sizeZ) {
+            xSize = sizeX + 2;
+            ySize = sizeY + 2;
+            zSize = sizeZ + 2;
+            yStride = zSize;
+            xStride = Math.multiplyExact(ySize, zSize);
+            cells = new byte[Math.multiplyExact(xSize, xStride)];
+        }
+
+        void markSolid(Cell cell) {
+            cells[index(cell.x(), cell.y(), cell.z())] = 1;
+        }
+
+        boolean contains(Cell cell) {
+            if (cell.x() < -1 || cell.y() < -1 || cell.z() < -1
+                    || cell.x() > xSize - 2 || cell.y() > ySize - 2 || cell.z() > zSize - 2) return false;
+            return cells[index(cell.x(), cell.y(), cell.z())] == 2;
+        }
+
+        void flood() {
+            int[] queue = new int[cells.length];
+            int head = 0;
+            int tail = 0;
+            cells[0] = 2;
+            queue[tail++] = 0;
+            while (head < tail) {
+                int current = queue[head++];
+                int x = current / xStride;
+                int remainder = current - x * xStride;
+                int y = remainder / yStride;
+                int z = remainder - y * yStride;
+                if (x > 0) tail = visit(current - xStride, queue, tail);
+                if (x + 1 < xSize) tail = visit(current + xStride, queue, tail);
+                if (y > 0) tail = visit(current - yStride, queue, tail);
+                if (y + 1 < ySize) tail = visit(current + yStride, queue, tail);
+                if (z > 0) tail = visit(current - 1, queue, tail);
+                if (z + 1 < zSize) tail = visit(current + 1, queue, tail);
             }
         }
-        return exterior;
+
+        private int visit(int index, int[] queue, int tail) {
+            if (cells[index] != 0) return tail;
+            cells[index] = 2;
+            queue[tail] = index;
+            return tail + 1;
+        }
+
+        private int index(int x, int y, int z) {
+            return (x + 1) * xStride + (y + 1) * yStride + z + 1;
+        }
     }
 
     // --- block families -------------------------------------------------------

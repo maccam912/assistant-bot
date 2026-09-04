@@ -46,6 +46,19 @@ public final class BotActions {
         player.sendSystemMessage(Component.literal("§a[Assistant] Stopping."), false);
     }
 
+    public static void undo(ServerPlayer player) {
+        AssistantBot bot = requireBot(player);
+        if (bot == null) return;
+        int changedPositions = bot.undoLatestBuild();
+        if (changedPositions < 0) {
+            player.sendSystemMessage(Component.literal(
+                    "§e[Assistant] There is no recent build to undo."), false);
+            return;
+        }
+        player.sendSystemMessage(Component.literal(
+                "§a[Assistant] Undoing the latest build (" + changedPositions + " changed blocks)..."), false);
+    }
+
     /** Plan + auto-execute a build, mirroring {@code /assistant build}. */
     public static void build(ServerPlayer player, String description) {
         AssistantBot bot = requireBot(player);

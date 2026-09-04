@@ -17,6 +17,7 @@ import net.minecraft.world.level.block.Block;
 /** Mechanical final-grid checks that should never be delegated to an LLM. */
 public final class VxbStructureValidator {
     private static final int[][] NEIGHBORS = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
+    private static final int LARGE_BUILD_BLOCKS = 10_000;
 
     private VxbStructureValidator() {}
 
@@ -79,6 +80,7 @@ public final class VxbStructureValidator {
                 // Under 'terrain keep' the missing support may simply be untouched world terrain,
                 // which the plan is allowed to lean on, so that case is advisory rather than fatal.
                 VxbDiagnostics.Severity severity = structure.shouldPreserveTerrain()
+                        || grid.size() >= LARGE_BUILD_BLOCKS
                         ? VxbDiagnostics.Severity.WARNING : VxbDiagnostics.Severity.BLOCKER;
                 Integer sourceLine = structure.getSourceLine(support);
                 if (sourceLine == null) sourceLine = structure.getSourceLine(firstCell(group));
@@ -128,7 +130,9 @@ public final class VxbStructureValidator {
                 }
             }
         }
-        result.add(VxbDiagnostics.Severity.BLOCKER, "Ungrounded Structure Component",
+        VxbDiagnostics.Severity severity = grid.size() >= LARGE_BUILD_BLOCKS
+                ? VxbDiagnostics.Severity.WARNING : VxbDiagnostics.Severity.BLOCKER;
+        result.add(severity, "Ungrounded Structure Component",
                 (grid.size() - reached.size()) + " blocks in " + components + " component(s) are not connected to y=0; example "
                         + format(example) + ". Draw something connecting it down, or set 'ground false' if it is meant to float.",
                 structure.getSourceLine(example));
@@ -145,8 +149,11 @@ public final class VxbStructureValidator {
                     for (int dy = 0; dy <= 1; dy++) {
                         Cell clearance = new Cell(lower.x() + outside[0] * sign, lower.y() + dy,
                                 lower.z() + outside[1] * sign);
-                        if (inside(structure, clearance) && grid.containsKey(clearance)) {
-                            result.add(VxbDiagnostics.Severity.BLOCKER, "Blocked Doorway",
+                        BlockEntry occupant = grid.get(clearance);
+                        if (inside(structure, clearance) && occupant != null && !isPlayerPassable(occupant)) {
+                            VxbDiagnostics.Severity severity = grid.size() >= LARGE_BUILD_BLOCKS
+                                    ? VxbDiagnostics.Severity.WARNING : VxbDiagnostics.Severity.BLOCKER;
+                            result.add(severity, "Blocked Doorway",
                                     "The door at " + format(firstCell(group)) + " is blocked by a block at "
                                             + format(clearance) + "; a doorway needs two blocks of headroom on both sides.",
                                     structure.getSourceLine(clearance));
@@ -165,7 +172,9 @@ public final class VxbStructureValidator {
             boolean gravity = path.endsWith("sand") || path.endsWith("gravel") || path.endsWith("concrete_powder")
                     || path.endsWith("anvil") || path.equals("dragon_egg");
             if (gravity && !grid.containsKey(new Cell(entry.getKey().x(), entry.getKey().y() - 1, entry.getKey().z()))) {
-                result.add(VxbDiagnostics.Severity.BLOCKER, "Unsupported Gravity Block",
+                VxbDiagnostics.Severity severity = grid.size() >= LARGE_BUILD_BLOCKS
+                        ? VxbDiagnostics.Severity.WARNING : VxbDiagnostics.Severity.BLOCKER;
+                result.add(severity, "Unsupported Gravity Block",
                         entry.getValue().blockId() + " at " + format(entry.getKey()) + " has no block below it.", null);
             }
         }

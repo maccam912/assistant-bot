@@ -4,11 +4,13 @@ import com.assistantbot.AssistantMod;
 import com.assistantbot.nav.BotPathfinder;
 import com.assistantbot.task.BotTask;
 import com.assistantbot.task.BuildRateLimiter;
+import com.assistantbot.task.BuildUndoSnapshot;
 import com.assistantbot.task.BuildTask;
 import com.assistantbot.task.CombatTask;
 import com.assistantbot.task.IdleTask;
 import com.assistantbot.task.PlanTask;
 import com.assistantbot.task.TickResult;
+import com.assistantbot.task.UndoBuildTask;
 import com.mojang.authlib.GameProfile;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -39,6 +41,7 @@ public class AssistantBot {
     private float lastKnownOwnerHealth;
     private BotPathfinder pathfinder;
     private double buildSpeedBlocksPerSecond = BuildRateLimiter.DEFAULT_BLOCKS_PER_SECOND;
+    private BuildUndoSnapshot latestBuildUndo;
 
     private static final int DOWNED_DURATION_TICKS = 2400; // 2 minutes at 20 TPS
     private static final double DOWNED_SPEED_MULTIPLIER = 0.25;
@@ -191,6 +194,31 @@ public class AssistantBot {
         return buildSpeedBlocksPerSecond;
     }
 
+    /** Starts a fresh one-build undo history once a valid build actually starts. */
+    public BuildUndoSnapshot beginBuildUndo() {
+        latestBuildUndo = new BuildUndoSnapshot(world);
+        return latestBuildUndo;
+    }
+
+    /**
+     * Interrupts any active work and starts restoring the latest build. Returns
+     * the number of positions queued, or {@code -1} when there is no build to undo.
+     * The history is consumed immediately, making undo intentionally one-shot.
+     */
+    public int undoLatestBuild() {
+        if (latestBuildUndo == null) return -1;
+
+        if (currentTask != null) currentTask.onStop(this);
+        if (savedTask != null && savedTask != currentTask) savedTask.onStop(this);
+        savedTask = null;
+
+        BuildUndoSnapshot snapshot = latestBuildUndo;
+        latestBuildUndo = null;
+        currentTask = new UndoBuildTask(snapshot);
+        currentTask.onStart(this);
+        return snapshot.size();
+    }
+
     private void onLethalDamage() {
         // Already downed — don't spam the log
         if (downedUntilTick >= 0) return;
@@ -248,7 +276,7 @@ public class AssistantBot {
 
     public String getStatusString() {
         String taskStatus = currentTask.getStatusString();
-        if (currentTask instanceof BuildTask) {
+        if (currentTask instanceof BuildTask || currentTask instanceof UndoBuildTask) {
             taskStatus += " @ " + BuildRateLimiter.format(buildSpeedBlocksPerSecond) + " blocks/s";
         }
         if (downedUntilTick >= 0) {

@@ -42,6 +42,8 @@ end
 
 One character, one block ID. `.` always means air and is never declared. `#` is a valid palette character. If you need a comment, start it with `//` so it cannot be mistaken for a block.
 
+Any non-whitespace character can be a symbol, including `=`. Inside grid rows, spaces are ignored as visual separators; they never mean air. Always draw air as `.`.
+
 **Never write block states.** No `facing=`, no `axis=`, no `half=`, no `hinge=`. The compiler works them out from what you drew — see "What the compiler decides for you" below. Writing them yourself is the single most common way these builds go wrong.
 
 ## Drawing slices
@@ -101,7 +103,7 @@ This is a feature: it is the check that you are holding one consistent shape in 
 - furniture and fixtures → small windowed `plan` slices
 - trim the overlap with a window (`face south z=6 y=1..6` leaves the floor to `plan y=0`)
 
-A cell no slice covers is air.
+A cell no slice covers is air. With the default `terrain replace`, drawn `.` is likewise empty and does not reserve the cell against another solid slice. With `terrain keep`, drawn `.` is an explicit excavation cell and must agree with overlapping views.
 
 ## Repeating a module
 
@@ -120,6 +122,10 @@ at 1 0 12 cottage turn=180 flip=x
 ```
 
 A part uses the global palette and its own local coordinates. `turn` is 0/90/180/270 clockwise from above and is applied before `flip=x` (mirror east–west) or `flip=z` (mirror north–south). Rotation rotates the drawing, so stairs, doors and pillars are re-derived correctly in their new orientation. Do not reach for parts for two or three copies; drawing them is clearer.
+
+Parts may be placed before or after their definition. An empty part is allowed and places nothing, which makes temporarily unfinished or unused modules harmless.
+
+`.` inside a part is transparent when the part is placed: it does not erase blocks already drawn in the main structure. Non-air part cells stamp over earlier drawing, in `at` line order, so furniture may sit on a drawn floor and posts may replace the ground beneath them. Put any air cells that must excavate terrain in a main-body slice instead.
 
 ## What the compiler decides for you
 

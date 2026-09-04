@@ -58,6 +58,9 @@ public final class Vxb2Parser {
                         + "'. Expected name, size, ground, terrain, pal, plan, face, part or at.");
             }
         }
+        for (Placement placement : ctx.placements) {
+            placePart(ctx, placement.line(), placement.lineNumber());
+        }
         if (ctx.sizeX < 1) throw new IllegalArgumentException("VXB-2 requires a 'size X Y Z' line.");
         if (ctx.palette.isEmpty()) throw new IllegalArgumentException("VXB-2 requires a 'pal' section with at least one symbol.");
         if (ctx.grid.isEmpty()) throw new IllegalArgumentException("VXB-2 produced no cells: no plan or face slices were drawn.");
@@ -113,7 +116,10 @@ public final class Vxb2Parser {
         }
         if (lower.startsWith("at ")) {
             if (insidePart) throw error(lineNumber, "'at' placements belong in the main body, not inside a part.");
-            placePart(ctx, line, lineNumber);
+            // Resolve all placements after reading the complete file. This makes part
+            // declarations order-independent, just like slices, and prevents a large
+            // draft from failing merely because a reusable part is defined later.
+            ctx.placements.add(new Placement(line, lineNumber));
             return true;
         }
         if (lower.startsWith("plan ") || lower.startsWith("face ")) {
@@ -137,7 +143,7 @@ public final class Vxb2Parser {
             if (body.length() > 1 && body.charAt(1) == '=') body = body.charAt(0) + " " + body.substring(2);
             String[] tokens = body.split("\\s+");
             if (tokens.length < 2) throw error(lineNumber, "Palette entry must be '<symbol> <block_id>', got '" + line + "'");
-            if (tokens[0].equals("=") || tokens[1].equals("=")) {
+            if (tokens[1].equals("=")) {
                 throw error(lineNumber, "Palette entry must be '<symbol> <block_id>', got '" + line + "'");
             }
             String symbolPart = tokens[0];
@@ -191,7 +197,9 @@ public final class Vxb2Parser {
             if (body == null) continue;
             String lower = body.toLowerCase(Locale.ROOT);
             if (lower.equals("end") || lower.equals("end part") || lower.equals("endpart")) {
-                if (cells.isEmpty()) throw error(bodyLine, "Part '" + name + "' contains no slices.");
+                if (cells.isEmpty()) {
+                    ctx.note("Line " + lineNumber + ": empty part '" + name + "' was ignored when placed.");
+                }
                 ctx.parts.put(name, new Part(name, px, py, pz, cells));
                 return;
             }
@@ -211,7 +219,8 @@ public final class Vxb2Parser {
         String name = parts[4].toLowerCase(Locale.ROOT);
         Part part = ctx.parts.get(name);
         if (part == null) {
-            throw error(lineNumber, "Unknown part '" + name + "'. Define it with 'part " + name + " X Y Z' first.");
+            throw error(lineNumber, "Unknown part '" + name + "'. Define it anywhere with 'part "
+                    + name + " X Y Z'.");
         }
         int turn = 0;
         String flip = "none";
@@ -234,6 +243,11 @@ public final class Vxb2Parser {
         int turnedX = (turn == 90 || turn == 270) ? part.sz() : part.sx();
         int turnedZ = (turn == 90 || turn == 270) ? part.sx() : part.sz();
         for (Map.Entry<Cell, Character> entry : part.cells().entrySet()) {
+            // Air in a reusable module is transparent. This lets furnishing and
+            // detail parts be stamped into an existing shell without erasing or
+            // conflicting with its walls. Explicit excavation belongs in a main
+            // body slice, whose dots remain authoritative under terrain keep.
+            if (entry.getValue() == '.') continue;
             Cell local = entry.getKey();
             int lx = local.x();
             int lz = local.z();
@@ -247,8 +261,7 @@ public final class Vxb2Parser {
             }
             if (flip.equals("x")) tx = turnedX - 1 - tx;
             if (flip.equals("z")) tz = turnedZ - 1 - tz;
-            write(ctx, ctx.grid, new Cell(x + tx, y + local.y(), z + tz), entry.getValue(), lineNumber,
-                    ctx.sizeX, ctx.sizeY, ctx.sizeZ, "part " + name);
+            stampPart(ctx, new Cell(x + tx, y + local.y(), z + tz), entry.getValue(), lineNumber, name);
         }
     }
 
@@ -344,8 +357,8 @@ public final class Vxb2Parser {
             }
             String body = stripRowLabel(raw, slice.rowAxis(), rowCoord, rowLine);
             if (body.indexOf(' ') >= 0) {
-                body = body.replace(' ', '.');
-                ctx.note("Line " + rowLine + ": spaces in a grid row were read as air.");
+                body = body.replace(" ", "");
+                ctx.note("Line " + rowLine + ": spaces in a grid row were ignored as visual separators; use '.' for air.");
             }
             if (body.length() < slice.width()) {
                 int missing = slice.width() - body.length();
@@ -453,6 +466,12 @@ public final class Vxb2Parser {
             throw error(lineNumber, origin + " writes (" + cell.x() + "," + cell.y() + "," + cell.z()
                     + ") which is outside size " + sizeX + " " + sizeY + " " + sizeZ + ".");
         }
+        // Air is only data when the author explicitly asked to preserve terrain,
+        // in which case it means excavation. In replace mode the site is cleared
+        // anyway, so retaining every drawn dot wastes enormous amounts of memory
+        // on large repeated slices and makes harmless overlap needlessly strict.
+        // Air in parts is always transparent when stamped.
+        if (symbol == '.' && (target != ctx.grid || !ctx.preserveTerrain)) return;
         Character previous = target.put(cell, symbol);
         if (previous != null && previous != symbol) {
             throw error(lineNumber, "Views disagree at (" + cell.x() + "," + cell.y() + "," + cell.z()
@@ -460,6 +479,21 @@ public final class Vxb2Parser {
                     + "'. Every slice is authoritative, so overlapping views must draw the same block.");
         }
         if (target == ctx.grid) ctx.sourceLines.putIfAbsent(cell, lineNumber);
+    }
+
+    /**
+     * A part is a composition operation rather than a second authoritative view:
+     * its non-air cells stamp over the main drawing and earlier placements. This
+     * is what makes a hoop base on a pitch or furniture on a floor expressible.
+     */
+    private static void stampPart(Ctx ctx, Cell cell, char symbol, int lineNumber, String name) {
+        if (cell.x() < 0 || cell.y() < 0 || cell.z() < 0
+                || cell.x() >= ctx.sizeX || cell.y() >= ctx.sizeY || cell.z() >= ctx.sizeZ) {
+            throw error(lineNumber, "part " + name + " writes (" + cell.x() + "," + cell.y() + "," + cell.z()
+                    + ") which is outside size " + ctx.sizeX + " " + ctx.sizeY + " " + ctx.sizeZ + ".");
+        }
+        ctx.grid.put(cell, symbol);
+        ctx.sourceLines.put(cell, lineNumber);
     }
 
     // --- small helpers -------------------------------------------------------
@@ -553,6 +587,8 @@ public final class Vxb2Parser {
 
     private record Part(String name, int sx, int sy, int sz, Map<Cell, Character> cells) {}
 
+    private record Placement(String line, int lineNumber) {}
+
     /** Cursor over the source plus the accumulating structure state. */
     private static final class Ctx {
         private final String[] lines;
@@ -568,6 +604,7 @@ public final class Vxb2Parser {
         private final Map<Cell, Character> grid = new HashMap<>();
         private final Map<Cell, Integer> sourceLines = new HashMap<>();
         private final Map<String, Part> parts = new LinkedHashMap<>();
+        private final List<Placement> placements = new ArrayList<>();
         private final List<String> notes = new ArrayList<>();
 
         Ctx(String[] lines) {

@@ -40,6 +40,7 @@ Output jar: `build/libs/assistant-bot-<version>.jar`
 | `/assistant speed [blocks-per-second]` | Show or set build speed (minimum 0.25, no upper limit; default 20); active builds update immediately |
 | `/assistant plans` | List all available build plans |
 | `/assistant build <description>` | Plan + auto-execute (convenience shortcut) |
+| `/assistant undo` | Undo the latest in-progress or completed build and restore replaced blocks |
 | `/assistant import <url> <description>` | Import a VXB-2 plan from a URL |
 | `/assistant status` | Show current task and position |
 | `/assistant menu` | Open the click-to-control bot menu (chest GUI) |

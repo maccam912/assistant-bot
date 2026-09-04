@@ -1,0 +1,2657 @@
+VXB-2
+name hogwarts_castle_and_movie_grounds
+size 256 100 240
+terrain replace
+pal
+S stone_bricks
+T smooth_sandstone
+Q chiseled_stone_bricks
+M mossy_stone_bricks
+P dark_oak_planks
+B dark_oak_log
+G glass_pane
+I iron_bars
+D dark_oak_door
+R deepslate_tiles
+r deepslate_tile_slab
+> deepslate_tile_stairs up=east
+< deepslate_tile_stairs up=west
+^ dark_oak_stairs up=south
+v dark_oak_stairs up=north
+u dark_oak_stairs up=east
+j dark_oak_stairs up=west
+p dark_oak_slab
+f dark_oak_fence
+l sea_lantern
+c candle
+H bookshelf
+h chiseled_bookshelf
+E enchanting_table
+L lectern
+C chest
+F furnace
+A anvil
+b white_bed
+w water
+a grass_block
+d dirt
+g oak_leaves
+t oak_log
+V vine
+k wheat
+n farmland
+q cauldron
+e brewing_stand
+O gold_block
+N black_concrete
+W white_concrete
+s sea_lantern
+U red_carpet
+J blue_carpet
+K green_carpet
+Y yellow_carpet
+x red_terracotta
+y blue_terracotta
+z yellow_terracotta
+m green_terracotta
+Z amethyst_block
+! lightning_rod
+o flower_pot
+i iron_block
+X cobweb
++ iron_bars
+= smooth_stone_slab
+( pumpkin
+) jack_o_lantern
+% campfire
+& red_mushroom
+; brown_mushroom
+end
+// Reusable dressed stone walks and quadrangle paving.
+part walk 25 1 5
+plan y=0
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+end
+part court 25 1 25
+plan y=0
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+end
+// Three occupied storeys, roof walk, four doors and a continuous ladder.
+part academic_range 25 28 25
+plan y=0
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+face south z=0 y=1..26
+Q.Q.Q.Q.Q.Q.Q.Q.Q.Q.Q.Q.Q
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTTTT
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTTTT
+SSSSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTTTT
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTTTT
+SSSSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTTTT
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSSSSSSSQQQSSSSSSSSSSS
+SSSSSSSSSSSS D SSSSSSSSSSSS
+SSSSSSSSSSSS D SSSSSSSSSSSS
+face south z=24 y=1..26
+Q.Q.Q.Q.Q.Q.Q.Q.Q.Q.Q.Q.Q
+SSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTTTT
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTTTT
+SSSSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTTTT
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTTTT
+SSSSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTTTT
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSGGGGGSSSSSGGGGGSSSSS
+SSSSSSSSSSSQQQSSSSSSSSSSS
+SSSSSSSSSSSSDSSSSSSSSSSSS
+SSSSSSSSSSSSDSSSSSSSSSSSS
+face west x=0 y=1..26 z=1..23
+.Q.Q.Q.Q.Q.Q.Q.Q.Q.Q.Q.
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTT
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTT
+SSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTT
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTT
+SSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTT
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSSSSSSSQQQSSSSSSSSSS
+SSSSSSSSSSSDSSSSSSSSSSS
+SSSSSSSSSSSDSSSSSSSSSSS
+face west x=24 y=1..26 z=1..23
+.Q.Q.Q.Q.Q.Q.Q.Q.Q.Q.Q.
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTT
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTT
+SSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTT
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTT
+SSSSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTTTTT
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSGGGGGSSSSSGGGGGSSSS
+SSSSSSSSSSQQQSSSSSSSSSS
+SSSSSSSSSSSDSSSSSSSSSSS
+SSSSSSSSSSSDSSSSSSSSSSS
+plan y=8,16,24 x=1..23 z=1..23
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSS.S
+SSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSS
+plan y=1..7,9..15,17..23,25 x=23 z=21
+S
+end
+// Tall residential and observatory towers; narrow lancets, six floors, steep spires.
+part tower 17 80 17
+plan y=0
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+plan y=1..2 x=0..16 z=0
+SSSSSSSSDSSSSSSSS
+plan y=1..2 x=0..16 z=16
+SSSSSSSSDSSSSSSSS
+plan y=3..9,13..19,23..29,33..39,43..49,53..59 x=0..16 z=0
+TSSSGGSSSSSGGSSST
+plan y=3..9,13..19,23..29,33..39,43..49,53..59 x=0..16 z=16
+TSSSGGSSSSSGGSSST
+plan y=10..12,20..22,30..32,40..42,50..52,60 x=0..16 z=0
+TTTTTTTTTTTTTTTTT
+plan y=10..12,20..22,30..32,40..42,50..52,60 x=0..16 z=16
+TTTTTTTTTTTTTTTTT
+plan y=1..59 x=0 z=1..15
+S
+S
+S
+G
+G
+S
+S
+S
+S
+S
+G
+G
+S
+S
+S
+plan y=1..59 x=16 z=1..15
+S
+S
+S
+G
+G
+S
+S
+S
+S
+S
+G
+G
+S
+S
+S
+plan y=60 x=0..16 z=1..15
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSS
+plan y=10,20,30,40,50 x=1..15 z=1..15
+SSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSS
+SSSSSSSSSSSSS.S
+SSSSSSSSSSSSSSS
+plan y=1..9,11..19,21..29,31..39,41..49,51..59 x=15 z=14
+S
+plan y=61 x=0..16 z=0..16
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrr
+plan y=62..63 x=1..15 z=1..15
+rrrrrrrrrrrrrrr
+rRRRRRRRRRRRRRr
+rRRRRRRRRRRRRRr
+rRRRRRRRRRRRRRr
+rRRRRRRRRRRRRRr
+rRRRRRRRRRRRRRr
+rRRRRRRRRRRRRRr
+rRRRRRRRRRRRRRr
+rRRRRRRRRRRRRRr
+rRRRRRRRRRRRRRr
+rRRRRRRRRRRRRRr
+rRRRRRRRRRRRRRr
+rRRRRRRRRRRRRRr
+rRRRRRRRRRRRRRr
+rrrrrrrrrrrrrrr
+plan y=64..65 x=2..14 z=2..14
+rrrrrrrrrrrrr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rrrrrrrrrrrrr
+plan y=66..67 x=3..13 z=3..13
+rrrrrrrrrrr
+rRRRRRRRRRr
+rRRRRRRRRRr
+rRRRRRRRRRr
+rRRRRRRRRRr
+rRRRRRRRRRr
+rRRRRRRRRRr
+rRRRRRRRRRr
+rRRRRRRRRRr
+rRRRRRRRRRr
+rrrrrrrrrrr
+plan y=68..69 x=4..12 z=4..12
+rrrrrrrrr
+rRRRRRRRr
+rRRRRRRRr
+rRRRRRRRr
+rRRRRRRRr
+rRRRRRRRr
+rRRRRRRRr
+rRRRRRRRr
+rrrrrrrrr
+plan y=70..71 x=5..11 z=5..11
+rrrrrrr
+rRRRRRr
+rRRRRRr
+rRRRRRr
+rRRRRRr
+rRRRRRr
+rrrrrrr
+plan y=72..73 x=6..10 z=6..10
+rrrrr
+rRRRr
+rRRRr
+rRRRr
+rrrrr
+plan y=74..75 x=7..9 z=7..9
+rrr
+rRr
+rrr
+plan y=76..78 x=8 z=8
+!
+end
+part hall_bay 31 22 16
+plan y=0
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+face west x=0 y=1..21
+QQQQQQQQQQQQQQQQ
+PPPPPPPPPPPPPPPP
+TTTTTTTTTTTTTTTT
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSSSSSSSSSSSST
+TSSSSSSSSSSSSSST
+TSSSSSSQQSSSSSST
+TSSSSSSDDSSSSSST
+TSSSSSSDDSSSSSST
+face west x=30 y=1..21
+QQQQQQQQQQQQQQQQ
+PPPPPPPPPPPPPPPP
+TTTTTTTTTTTTTTTT
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSGGGGGGGGSSST
+TSSSSSSSSSSSSSST
+TSSSSSSSSSSSSSST
+TSSSSSSQQSSSSSST
+TSSSSSSDDSSSSSST
+TSSSSSSDDSSSSSST
+end
+part hall_roof_rib 31 17 1
+face south z=0
+...............r
+...............R
+..............>R<
+.............>...<
+............>.....<
+...........>.......<
+..........>.........<
+.........>...........<
+........>.............<
+.......>...............<
+......>.................<
+.....>...................<
+....>.....................<
+...>.......................<
+..>.........................<
+.>...........................<
+>.............................<
+end
+part feast_table 5 19 16
+plan y=1
+u.f.j
+u.f.j
+u.f.j
+u.f.j
+u.f.j
+u.f.j
+u.f.j
+u.f.j
+u.f.j
+u.f.j
+u.f.j
+u.f.j
+u.f.j
+u.f.j
+u.f.j
+u.f.j
+plan y=2 x=2 z=0..15
+p
+p
+p
+p
+p
+p
+p
+p
+p
+p
+p
+p
+p
+p
+p
+p
+plan y=3,17 x=2 z=2
+c
+plan y=3,18 x=2 z=6
+c
+plan y=3,17 x=2 z=10
+c
+plan y=3,18 x=2 z=14
+c
+end
+part switchback 9 18 14
+plan y=0,16 x=0..8 z=0..2
+SSSSSSSSS
+SSSSSSSSS
+SSSSSSSSS
+plan y=8 x=0..8 z=10..13
+SSSSSSSSS
+SSSSSSSSS
+SSSSSSSSS
+SSSSSSSSS
+plan y=1 x=0..2 z=3
+^^^
+plan y=2 x=0..2 z=4
+^^^
+plan y=3 x=0..2 z=5
+^^^
+plan y=4 x=0..2 z=6
+^^^
+plan y=5 x=0..2 z=7
+^^^
+plan y=6 x=0..2 z=8
+^^^
+plan y=7 x=0..2 z=9
+^^^
+plan y=9 x=6..8 z=9
+vvv
+plan y=10 x=6..8 z=8
+vvv
+plan y=11 x=6..8 z=7
+vvv
+plan y=12 x=6..8 z=6
+vvv
+plan y=13 x=6..8 z=5
+vvv
+plan y=14 x=6..8 z=4
+vvv
+plan y=15 x=6..8 z=3
+vvv
+plan y=1,17 x=0..8 z=0
+fffffffff
+plan y=9 x=0..8 z=13
+fffffffff
+end
+// Furnishing modules are deliberately separate from the architectural shells.
+part shelf 1 5 9
+face west x=0
+HHHHHHHHH
+HHHHHHHHH
+HHHHHHHHH
+HHHHHHHHH
+HHHHHHHHH
+end
+part classroom 19 6 19
+plan y=0 x=0..18 z=6..18
+.u...j.....u...j...
+.fpppf.....fpppf...
+...................
+...................
+.u...j.....u...j...
+.fpppf.....fpppf...
+...................
+...................
+.u...j.....u...j...
+.fpppf.....fpppf...
+...................
+...................
+...................
+plan y=1 x=1..5 z=7
+ppppp
+plan y=1 x=11..15 z=7
+ppppp
+plan y=1 x=1..5 z=11
+ppppp
+plan y=1 x=11..15 z=11
+ppppp
+plan y=1 x=1..5 z=15
+ppppp
+plan y=1 x=11..15 z=15
+ppppp
+plan y=0 x=7..11 z=2..3
+PPPPP
+..j..
+plan y=1 x=7..11 z=2
+c.L.c
+face south z=0 x=5..13 y=2..4
+BBBBBBBBB
+BNNNNNNNB
+BBBBBBBBB
+plan y=4 x=0 z=3
+l
+plan y=4 x=18 z=3
+l
+end
+part dormitory 13 7 11
+plan y=0
+.Cbb.....bbC.
+..bb.....bb..
+.............
+.............
+.Cbb.....bbC.
+..bb.....bb..
+.............
+.............
+.Cbb.....bbC.
+..bb.....bb..
+.............
+plan y=1 x=1 z=0
+l
+plan y=1 x=11 z=0
+l
+plan y=1 x=5..7 z=5..7
+...
+.L.
+u.j
+end
+part hospital 19 6 19
+plan y=0
+Cbb.............bbC.
+.bb.............bb..
+...................
+...................
+Cbb.............bbC.
+.bb.............bb..
+...................
+...................
+Cbb.............bbC.
+.bb.............bb..
+...................
+...................
+Cbb.............bbC.
+.bb.............bb..
+...................
+...................
+....PPPPPPPPPPP....
+...................
+...................
+plan y=1 x=4..14 z=16
+e.q.l.e.l.q
+plan y=4 x=9 z=4
+l
+plan y=4 x=9 z=12
+l
+end
+part potion_lab 19 6 19
+plan y=0
+HHH...CCCCC...HHH..
+...................
+...................
+.qqq...qqq...qqq...
+.PPP...PPP...PPP...
+...................
+.u.j...u.j...u.j...
+...................
+...................
+.qqq...qqq...qqq...
+.PPP...PPP...PPP...
+...................
+.u.j...u.j...u.j...
+...................
+...................
+....PPPPPPPPPPP....
+...................
+.........j.........
+...................
+plan y=1 x=1..15 z=4
+e.e...e.e...e.e
+plan y=1 x=1..15 z=10
+e.e...e.e...e.e
+plan y=1 x=4..14 z=15
+C.e.q.L.e.C
+plan y=4 x=9 z=7
+l
+end
+part lounge 13 7 11
+plan y=0
+HHH..MMM..HHH
+HHH..M%M..HHH
+.....MMM.....
+.............
+.uuu.....jjj.
+.............
+.....ppp.....
+.....ppp.....
+.uuu.....jjj.
+.............
+C.....L.....C
+plan y=1 x=5..7 z=0..2
+MMM
+MIM
+MMM
+plan y=2..5 x=5..7 z=0..2
+MMM
+MMM
+MMM
+plan y=4 x=1 z=6
+l
+plan y=4 x=11 z=6
+l
+end
+part bath 19 6 19
+plan y=0
+qqq....PPP....qqq..
+...................
+..WWWWWWWWWWWWWWW..
+..WwwwwwwwwwwwwwW..
+..WwwwwwwwwwwwwwW..
+..WwwwwwwwwwwwwwW..
+..WwwwwwwwwwwwwwW..
+..WwwwwwwwwwwwwwW..
+..WwwwwwwwwwwwwwW..
+..WwwwwwwwwwwwwwW..
+..WwwwwwwwwwwwwwW..
+..WwwwwwwwwwwwwwW..
+..WwwwwwwwwwwwwwW..
+..WwwwwwwwwwwwwwW..
+..WWWWWWWWWWWWWWW..
+...................
+..uuu.........jjj..
+...................
+C.................C
+plan y=1 x=7..9 z=0
+cqc
+plan y=4 x=9 z=9
+s
+end
+part kitchen 19 6 19
+plan y=0
+FFFFFF..CCCCCC.....
+...................
+.qqq.........qqq...
+...................
+.PPPPPPPPPPPPPPPP..
+...................
+...................
+.PPPPPPPPPPPPPPPP..
+...................
+...................
+.PPPPPPPPPPPPPPPP..
+...................
+...................
+.PPPPPPPPPPPPPPPP..
+...................
+...................
+CCCC....CCCC....CCC
+...................
+...................
+plan y=1 x=1..16 z=4
+o.c.o.c.o.c.o.c.
+plan y=1 x=1..16 z=7
+o.c.o.c.o.c.o.c.
+plan y=1 x=1..16 z=10
+o.c.o.c.o.c.o.c.
+plan y=1 x=1..16 z=13
+o.c.o.c.o.c.o.c.
+plan y=4 x=9 z=9
+l
+end
+part trophy 19 6 19
+plan y=0
+.O...O...O...O...O.
+...................
+...................
+.O...............O.
+...................
+...................
+.O...............O.
+...................
+...................
+.O.......Q.......O.
+...................
+...................
+.O...............O.
+...................
+...................
+.O...............O.
+...................
+...................
+.O...O...O...O...O.
+plan y=1 x=1..17 z=0
+c...c...c...c...c
+plan y=1 x=1..17 z=18
+c...c...c...c...c
+plan y=1..2 x=9 z=9
+i
+plan y=3 x=9 z=9
+O
+plan y=4 x=9 z=9
+l
+end
+// Long lower dungeon with serpent colonnades and water channels.
+part chamber_bay 25 11 20
+plan y=0,10
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMM
+face west x=0 y=1..9
+MMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMM
+MMIIIMMMIIIMMMIIIMMM
+MMIIIMMMIIIMMMIIIMMM
+MMIIIMMMIIIMMMIIIMMM
+MMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMDDMMMMMMMMM
+MMMMMMMMMDDMMMMMMMMM
+face west x=24 y=1..9
+MMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMM
+MMIIIMMMIIIMMMIIIMMM
+MMIIIMMMIIIMMMIIIMMM
+MMIIIMMMIIIMMMIIIMMM
+MMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMDDMMMMMMMMM
+MMMMMMMMMDDMMMMMMMMM
+plan y=1 x=5..7 z=0..19
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+plan y=1 x=17..19 z=0..19
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+www
+plan y=1..8 x=2..3 z=4..5
+MM
+MM
+plan y=1..8 x=21..22 z=4..5
+MM
+MM
+plan y=1..8 x=2..3 z=14..15
+MM
+MM
+plan y=1..8 x=21..22 z=14..15
+MM
+MM
+plan y=7 x=4 z=4
+s
+plan y=7 x=20 z=4
+s
+plan y=7 x=4 z=14
+s
+plan y=7 x=20 z=14
+s
+end
+// Herbology glasshouses.
+part greenhouse 13 11 25
+plan y=0
+SSSSSSSSSSSSS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SSSSSSSSSSSSS
+SSSSSSSSSSSSS
+SSSSSSSSSSSSS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SnnnnnSnnnnnS
+SSSSSSSSSSSSS
+face west x=0 y=1..5
+BBBBBBBBBBBBBBBBBBBBBBBBB
+BGGGGGGGGGGGBGGGGGGGGGGGB
+BGGGGGGGGGGGBGGGGGGGGGGGB
+BGGGGGGGGGGGBGGGGGGGGGGGB
+BSSSSSSSSSSSBSSSSSSSSSSSB
+face west x=12 y=1..5
+BBBBBBBBBBBBBBBBBBBBBBBBB
+BGGGGGGGGGGGBGGGGGGGGGGGB
+BGGGGGGGGGGGBGGGGGGGGGGGB
+BGGGGGGGGGGGBGGGGGGGGGGGB
+BSSSSSSSSSSSBSSSSSSSSSSSB
+face south z=0 x=1..11 y=1..5
+BBBBBBBBBBB
+GGGGGGGGGGG
+GGGGGBGGGGG
+SSSSSDSSSSS
+SSSSSDSSSSS
+face south z=24 x=1..11 y=1..5
+BBBBBBBBBBB
+GGGGGGGGGGG
+GGGGGBGGGGG
+SSSSSDSSSSS
+SSSSSDSSSSS
+plan y=6 x=0..12 z=0..24
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+BBBBBBBBBBBBB
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+GGGGGGGGGGGGG
+plan y=1 x=1..11 z=1..10
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+plan y=1 x=1..11 z=14..23
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+kkkkk.kkkkk
+plan y=1 x=1..4 z=12
+qCoL
+plan y=1 x=8..11 z=12
+LoCq
+end
+part tree 11 19 11
+plan y=0 x=3..7 z=3..7
+..t..
+..t..
+ttttt
+..t..
+..t..
+plan y=1..12 x=4..6 z=4..6
+ttt
+ttt
+ttt
+plan y=8 x=1..9 z=5
+ttttttttt
+plan y=10 x=5 z=1..9
+t
+t
+t
+t
+t
+t
+t
+t
+t
+plan y=11..13 x=0..10 z=0..3
+...ggggg...
+.ggggggggg.
+ggggggggggg
+ggggggggggg
+plan y=11..13 x=0..3 z=4..6
+gggg
+gggg
+gggg
+plan y=11..13 x=7..10 z=4..6
+gggg
+gggg
+gggg
+plan y=11..13 x=0..10 z=7..10
+ggggggggggg
+ggggggggggg
+.ggggggggg.
+...ggggg...
+plan y=14..16 x=1..9 z=1..9
+..ggggg..
+.ggggggg.
+ggggggggg
+ggggggggg
+ggggggggg
+ggggggggg
+ggggggggg
+.ggggggg.
+..ggggg..
+plan y=17 x=3..7 z=3..7
+.ggg.
+ggggg
+ggggg
+ggggg
+.ggg.
+end
+part pitch_tile 11 1 15
+plan y=0
+aaaaaaaaaaa
+aaaaaaaaaaa
+aaaaaaaaaaa
+aaaaaaaaaaa
+aaaaaaaaaaa
+aaaaaaaaaaa
+aaaaaaaaaaa
+aaaaaaaaaaa
+aaaaaaaaaaa
+aaaaaaaaaaa
+aaaaaaaaaaa
+aaaaaaaaaaa
+aaaaaaaaaaa
+aaaaaaaaaaa
+aaaaaaaaaaa
+end
+part hoop 7 16 1
+face south z=0
+..OOO..
+.O...O.
+O.....O
+O.....O
+.O...O.
+..OOO..
+...O...
+...O...
+...O...
+...O...
+...O...
+...O...
+...O...
+...O...
+...O...
+...S...
+end
+part stand 6 15 15
+plan y=0 x=0..5 z=0..14
+SSSSSS
+SSSSSS
+SSSSSS
+SSSSSS
+SSSSSS
+SSSSSS
+SSSSSS
+SSSSSS
+SSSSSS
+SSSSSS
+SSSSSS
+SSSSSS
+SSSSSS
+SSSSSS
+SSSSSS
+plan y=1 x=0 z=0..14
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+plan y=2 x=1 z=0..14
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+plan y=3 x=2 z=0..14
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+plan y=4 x=3 z=0..14
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+u
+plan y=5 x=4..5 z=0..14
+PP
+PP
+PP
+PP
+PP
+PP
+PP
+PP
+PP
+PP
+PP
+PP
+PP
+PP
+PP
+plan y=6 x=5 z=0..14
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+plan y=1..4,7..12 x=5 z=0
+B
+plan y=1..4,7..12 x=5 z=14
+B
+plan y=13 x=0..5 z=0..14
+rrrrrr
+rrrrrr
+rrrrrr
+rrrrrr
+rrrrrr
+rrrrrr
+rrrrrr
+rrrrrr
+rrrrrr
+rrrrrr
+rrrrrr
+rrrrrr
+rrrrrr
+rrrrrr
+rrrrrr
+end
+part lake 16 1 16
+plan y=0
+wwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwww
+end
+part covered_bridge 9 11 16
+plan y=2
+PPPPPPPPP
+PPPPPPPPP
+PPPPPPPPP
+PPPPPPPPP
+PPPPPPPPP
+PPPPPPPPP
+PPPPPPPPP
+PPPPPPPPP
+PPPPPPPPP
+PPPPPPPPP
+PPPPPPPPP
+PPPPPPPPP
+PPPPPPPPP
+PPPPPPPPP
+PPPPPPPPP
+PPPPPPPPP
+plan y=0..1,3..5 x=0 z=0
+B
+plan y=0..1,3..5 x=8 z=0
+B
+plan y=0..1,3..5 x=0 z=15
+B
+plan y=0..1,3..5 x=8 z=15
+B
+plan y=3 x=0 z=1..14
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+plan y=3 x=8 z=1..14
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+f
+plan y=6
+>.......<
+>.......<
+>.......<
+>.......<
+>.......<
+>.......<
+>.......<
+>.......<
+>.......<
+>.......<
+>.......<
+>.......<
+>.......<
+>.......<
+>.......<
+>.......<
+plan y=7
+.>.....<
+.>.....<
+.>.....<
+.>.....<
+.>.....<
+.>.....<
+.>.....<
+.>.....<
+.>.....<
+.>.....<
+.>.....<
+.>.....<
+.>.....<
+.>.....<
+.>.....<
+.>.....<
+plan y=8
+..>...<
+..>...<
+..>...<
+..>...<
+..>...<
+..>...<
+..>...<
+..>...<
+..>...<
+..>...<
+..>...<
+..>...<
+..>...<
+..>...<
+..>...<
+..>...<
+plan y=9
+...>R<
+...>R<
+...>R<
+...>R<
+...>R<
+...>R<
+...>R<
+...>R<
+...>R<
+...>R<
+...>R<
+...>R<
+...>R<
+...>R<
+...>R<
+...>R<
+plan y=10 x=4 z=0..15
+r
+r
+r
+r
+r
+r
+r
+r
+r
+r
+r
+r
+r
+r
+r
+r
+plan y=5 x=4 z=4
+l
+plan y=5 x=4 z=11
+l
+end
+// Castle layout, approximately 190 by 155 metres, with separate grounds.
+at 70 0 35 academic_range
+at 95 0 35 academic_range
+at 120 0 35 academic_range
+at 145 0 35 academic_range
+at 145 0 60 academic_range
+at 145 0 85 academic_range
+at 145 0 110 academic_range
+at 70 0 135 academic_range
+at 95 0 135 academic_range
+at 120 0 135 academic_range
+at 66 0 105 academic_range
+at 35 0 30 tower
+at 175 0 30 tower
+at 35 0 135 tower
+at 175 0 135 tower
+at 175 0 85 tower
+at 5 0 20 tower
+at 35 0 55 hall_bay
+at 35 0 71 hall_bay
+at 35 0 87 hall_bay
+at 35 0 103 hall_bay
+at 35 22 55 hall_roof_rib
+at 35 22 56 hall_roof_rib
+at 35 22 57 hall_roof_rib
+at 35 22 58 hall_roof_rib
+at 35 22 59 hall_roof_rib
+at 35 22 60 hall_roof_rib
+at 35 22 61 hall_roof_rib
+at 35 22 62 hall_roof_rib
+at 35 22 63 hall_roof_rib
+at 35 22 64 hall_roof_rib
+at 35 22 65 hall_roof_rib
+at 35 22 66 hall_roof_rib
+at 35 22 67 hall_roof_rib
+at 35 22 68 hall_roof_rib
+at 35 22 69 hall_roof_rib
+at 35 22 70 hall_roof_rib
+at 35 22 71 hall_roof_rib
+at 35 22 72 hall_roof_rib
+at 35 22 73 hall_roof_rib
+at 35 22 74 hall_roof_rib
+at 35 22 75 hall_roof_rib
+at 35 22 76 hall_roof_rib
+at 35 22 77 hall_roof_rib
+at 35 22 78 hall_roof_rib
+at 35 22 79 hall_roof_rib
+at 35 22 80 hall_roof_rib
+at 35 22 81 hall_roof_rib
+at 35 22 82 hall_roof_rib
+at 35 22 83 hall_roof_rib
+at 35 22 84 hall_roof_rib
+at 35 22 85 hall_roof_rib
+at 35 22 86 hall_roof_rib
+at 35 22 87 hall_roof_rib
+at 35 22 88 hall_roof_rib
+at 35 22 89 hall_roof_rib
+at 35 22 90 hall_roof_rib
+at 35 22 91 hall_roof_rib
+at 35 22 92 hall_roof_rib
+at 35 22 93 hall_roof_rib
+at 35 22 94 hall_roof_rib
+at 35 22 95 hall_roof_rib
+at 35 22 96 hall_roof_rib
+at 35 22 97 hall_roof_rib
+at 35 22 98 hall_roof_rib
+at 35 22 99 hall_roof_rib
+at 35 22 100 hall_roof_rib
+at 35 22 101 hall_roof_rib
+at 35 22 102 hall_roof_rib
+at 35 22 103 hall_roof_rib
+at 35 22 104 hall_roof_rib
+at 35 22 105 hall_roof_rib
+at 35 22 106 hall_roof_rib
+at 35 22 107 hall_roof_rib
+at 35 22 108 hall_roof_rib
+at 35 22 109 hall_roof_rib
+at 35 22 110 hall_roof_rib
+at 35 22 111 hall_roof_rib
+at 35 22 112 hall_roof_rib
+at 35 22 113 hall_roof_rib
+at 35 22 114 hall_roof_rib
+at 35 22 115 hall_roof_rib
+at 35 22 116 hall_roof_rib
+at 35 22 117 hall_roof_rib
+at 35 22 118 hall_roof_rib
+at 38 0 58 feast_table
+at 45 0 58 feast_table
+at 52 0 58 feast_table
+at 59 0 58 feast_table
+at 38 0 74 feast_table
+at 45 0 74 feast_table
+at 52 0 74 feast_table
+at 59 0 74 feast_table
+at 38 0 90 feast_table
+at 45 0 90 feast_table
+at 52 0 90 feast_table
+at 59 0 90 feast_table
+face south z=55 x=36..64 y=1..21
+QQQQQQQQQQQQQQQQQQQQQQQQQQQQQ
+TTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+SSSSSSSSSSSGGGGGGGSSSSSSSSSSS
+SSSSSSSSSSSGGGGGGGSSSSSSSSSSS
+SSSSSSSSSSSGGGGGGGSSSSSSSSSSS
+SSSSSSSSSSSGGGGGGGSSSSSSSSSSS
+SSSSSSSSSSSGGGGGGGSSSSSSSSSSS
+SSSSSSSSSSSGGGGGGGSSSSSSSSSSS
+SSSSGGGGSSSSSSSSSSSSSGGGGSSSS
+SSSSGGGGSSSSSSSSSSSSSGGGGSSSS
+SSSSGGGGSSSSSSSSSSSSSGGGGSSSS
+SSSSGGGGSSSSSSSSSSSSSGGGGSSSS
+SSSSGGGGSSSSSSSSSSSSSGGGGSSSS
+SSSSGGGGSSSSSSSSSSSSSGGGGSSSS
+SSSSGGGGSSSSSSSSSSSSSGGGGSSSS
+SSSSSSSSSSSSQQQQQSSSSSSSSSSSS
+SSSSSSSSSSSSQ...QSSSSSSSSSSSS
+SSSSSSSSSSSSQ...QSSSSSSSSSSSS
+SSSSSSSSSSSSQ...QSSSSSSSSSSSS
+SSSSSSSSSSSSQDDDQSSSSSSSSSSSS
+SSSSSSSSSSSSQDDDQSSSSSSSSSSSS
+face south z=118 x=36..64 y=1..21
+QQQQQQQQQQQQQQQQQQQQQQQQQQQQQ
+TTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+SSSSSSSSSSSGGGGGGGSSSSSSSSSSS
+SSSSSSSSSSGGGGGGGGGSSSSSSSSSS
+SSSSSSSSSGGGGGGGGGGGSSSSSSSSS
+SSSSSSSSSGGGGGGGGGGGSSSSSSSSS
+SSSSSSSSSGGGGGGGGGGGSSSSSSSSS
+SSSSSSSSSGGGGGGGGGGGSSSSSSSSS
+SSSSSSSSSGGGGGGGGGGGSSSSSSSSS
+SSSSSSSSSSGGGGGGGGGSSSSSSSSSS
+SSSSSSSSSSSGGGGGGGSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+plan y=1 x=37..63 z=111..116
+SSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSS
+plan y=2 x=39..61 z=113..115
+PPPPPPPPPPPPPPPPPPPPPPP
+.......................
+u.u.u.u.u.u.u.u.u.u.u.u
+plan y=3 x=39..61 z=113
+c...c...c..L..c...c...c
+plan y=2 x=50 z=111
+L
+plan y=15..18 x=40..42 z=116
+xxx
+plan y=15..18 x=46..48 z=116
+zzz
+plan y=15..18 x=52..54 z=116
+yyy
+plan y=15..18 x=58..60 z=116
+mmm
+// Grand staircase tower: four full switchbacks, portrait galleries and balconies.
+plan y=0 x=75..105 z=70..100
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+plan y=1..2 x=75..105 z=70
+SSSSSSSSSSSSSSDDDSSSSSSSSSSSSSS
+plan y=1..2 x=75..105 z=100
+SSSSSSSSSSSSSSDDDSSSSSSSSSSSSSS
+plan y=3..67 x=75..105 z=70
+TSSSSGGGSSSSSGGGGSSSSSGGGSSSSST
+plan y=3..67 x=75..105 z=100
+TSSSSGGGSSSSSGGGGSSSSSGGGSSSSST
+plan y=1..67 x=75 z=71..99
+S
+S
+S
+S
+G
+G
+G
+S
+S
+S
+S
+S
+G
+G
+G
+G
+G
+S
+S
+S
+S
+S
+G
+G
+G
+S
+S
+S
+S
+plan y=1..67 x=105 z=71..99
+S
+S
+S
+S
+G
+G
+G
+S
+S
+S
+S
+S
+G
+G
+G
+G
+G
+S
+S
+S
+S
+S
+G
+G
+G
+S
+S
+S
+S
+plan y=16,32,48,64 x=87..104 z=71..99
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSS
+at 78 0 74 switchback
+at 78 16 74 switchback
+at 78 32 74 switchback
+at 78 48 74 switchback
+plan y=68 x=75..105 z=70..100
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+plan y=69..71 x=84..96 z=79..91
+rrrrrrrrrrrrr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rRRRRRRRRRRRr
+rrrrrrrrrrrrr
+plan y=72..74 x=86..94 z=81..89
+rrrrrrrrr
+rRRRRRRRr
+rRRRRRRRr
+rRRRRRRRr
+rRRRRRRRr
+rRRRRRRRr
+rRRRRRRRr
+rRRRRRRRr
+rrrrrrrrr
+plan y=75..78 x=88..92 z=83..87
+rrrrr
+rRRRr
+rRRRr
+rRRRr
+rrrrr
+plan y=79..85 x=90 z=85
+!
+// Portrait frames at each landing.
+part portrait 1 5 5
+face west x=0
+OOOOO
+OxxxO
+OxzxO
+OxxxO
+OOOOO
+end
+at 104 3 77 portrait
+at 104 19 77 portrait
+at 104 35 77 portrait
+at 104 51 77 portrait
+at 104 19 90 portrait
+at 104 35 90 portrait
+at 104 51 90 portrait
+at 91 17 73 shelf
+at 98 17 73 shelf
+at 91 33 73 shelf
+at 98 33 73 shelf
+at 91 49 73 shelf
+at 98 49 73 shelf
+plan y=1,17,33,49,65 x=94..100 z=91..95
+u.....j
+..ppp..
+..pLp..
+..ppp..
+u.....j
+plan y=5,21,37,53,67 x=96 z=86
+l
+// Library and restricted stacks, classroom subjects, hospital and bathrooms.
+at 73 1 38 shelf
+at 78 1 38 shelf
+at 84 1 38 shelf
+at 90 1 38 shelf
+at 73 9 38 shelf
+at 78 9 38 shelf
+at 84 9 38 shelf
+at 90 9 38 shelf
+at 73 1 48 shelf
+at 78 1 48 shelf
+at 84 1 48 shelf
+at 90 1 48 shelf
+at 73 9 48 shelf
+at 78 9 48 shelf
+at 84 9 48 shelf
+at 90 9 48 shelf
+at 73 17 38 trophy
+at 98 1 38 classroom
+at 98 9 38 classroom
+at 98 17 38 classroom
+at 123 1 38 potion_lab
+at 123 9 38 potion_lab
+at 123 17 38 kitchen
+at 148 1 38 hospital
+at 148 9 38 bath
+at 148 17 38 bath
+at 148 1 63 classroom
+at 148 9 63 trophy
+at 148 1 88 classroom
+at 148 9 88 library_seating
+at 148 17 88 hospital
+at 148 1 113 kitchen
+at 148 9 113 kitchen
+at 148 17 113 classroom
+at 98 1 138 trophy
+at 98 9 138 classroom
+at 98 17 138 classroom
+at 123 1 138 trophy
+at 123 9 138 trophy
+at 123 17 138 hospital
+at 69 1 108 trophy
+at 69 9 108 trophy
+at 69 17 108 classroom
+part library_seating 19 7 19
+plan y=0
+HHHHH.........HHHHH
+...................
+..u.j...u.j...u.j..
+..PPP...PPP...PPP..
+...................
+...................
+..u.j...u.j...u.j..
+..PPP...PPP...PPP..
+...................
+...................
+..u.j...u.j...u.j..
+..PPP...PPP...PPP..
+...................
+...................
+..u.j...u.j...u.j..
+..PPP...PPP...PPP..
+...................
+.........E.........
+C.................C
+plan y=1 x=2..16 z=3
+L.c...L.c...L.c
+plan y=1 x=2..16 z=7
+L.c...L.c...L.c
+plan y=1 x=2..16 z=11
+L.c...L.c...L.c
+plan y=1 x=2..16 z=15
+L.c...L.c...L.c
+plan y=4 x=9 z=9
+l
+end
+plan y=1 x=81..87 z=57
+L.L.L.L
+plan y=9 x=81..87 z=57
+E.L.E.L
+plan y=10..13 x=71..91 z=47
+IIIIIIIIIIIIIIIIIIIII
+// Access ladders drawn independently so floors retain explicit shaft holes.
+part range_ladder 1 26 1
+pal
+end
+end
+// House common rooms and dormitories.
+at 37 1 32 lounge
+at 37 11 32 dormitory
+at 37 21 32 dormitory
+at 37 31 32 dormitory
+at 37 41 32 lounge
+at 37 51 32 lounge
+at 177 1 32 lounge
+at 177 11 32 dormitory
+at 177 21 32 dormitory
+at 177 31 32 dormitory
+at 177 41 32 dormitory
+at 177 51 32 lounge
+at 37 1 137 lounge
+at 37 11 137 dormitory
+at 37 21 137 dormitory
+at 37 31 137 dormitory
+at 37 41 137 dormitory
+at 37 51 137 lounge
+at 177 1 137 lounge
+at 177 11 137 dormitory
+at 177 21 137 dormitory
+at 177 31 137 dormitory
+at 177 41 137 dormitory
+at 177 51 137 lounge
+plan y=1 x=42..44 z=43..44
+UUU
+UUU
+plan y=1 x=182..184 z=43..44
+JJJ
+JJJ
+plan y=1 x=42..44 z=148..149
+KKK
+KKK
+plan y=1 x=182..184 z=148..149
+YYY
+YYY
+// Astronomy and Dumbledore's office: books, desk, pensieve, phoenix perch.
+at 177 1 87 lounge
+at 177 11 87 dormitory
+at 177 21 87 dormitory
+at 177 31 87 lounge
+at 177 41 87 lounge
+plan y=51 x=177..187 z=87..95
+HHH.....HHH
+H.........H
+H.........H
+...........
+...PPPPP...
+.....j.....
+...........
+..q.....f..
+...........
+plan y=52 x=180..184 z=91
+cLoLc
+plan y=52 x=179 z=94
+w
+plan y=52..53 x=185 z=94
+f
+plan y=54 x=185 z=94
+x
+plan y=55 x=185 z=94
+c
+plan y=51 x=178..183 z=98
+...f..
+plan y=52 x=178..183 z=98
+...AAA
+plan y=53 x=183 z=98
+G
+// Owlery perches and nest chests on all six levels.
+plan y=1,11,21,31,41,51 x=7..18 z=22..30
+C.f.C.f.C.f.
+............
+f.........f.
+............
+C.........C.
+............
+f.........f.
+............
+C.f.C.f.C.f.
+plan y=5,15,25,35,45,55 x=13 z=28
+l
+// Room of Requirement: mirror alcove and a maze of stored treasures.
+face south z=62 x=151..163 y=17..22
+....OOOOO....
+...OGGGGGO...
+...OGGGGGO...
+...OGGGGGO...
+...OGGGGGO...
+...OOOOOOO...
+plan y=17 x=148..165 z=66..77
+CCHH...CC...HH..CC
+CCHH...CC...HH..CC
+..................
+..AAA...HHH...CC..
+........HHH.......
+C....C.......C....
+C....C.......C....
+..................
+.HHH...CCC...HHH..
+.HHH.........HHH..
+..................
+........E.........
+// Giant wizard chess, Devil's Snare and flying-key chambers.
+plan y=1 x=74..90 z=139..155
+WNWNWNWNWNWNWNWNW
+NWNWNWNWNWNWNWNWN
+WNWNWNWNWNWNWNWNW
+NWNWNWNWNWNWNWNWN
+WNWNWNWNWNWNWNWNW
+NWNWNWNWNWNWNWNWN
+WNWNWNWNWNWNWNWNW
+NWNWNWNWNWNWNWNWN
+WNWNWNWNWNWNWNWNW
+NWNWNWNWNWNWNWNWN
+WNWNWNWNWNWNWNWNW
+NWNWNWNWNWNWNWNWN
+WNWNWNWNWNWNWNWNW
+NWNWNWNWNWNWNWNWN
+WNWNWNWNWNWNWNWNW
+NWNWNWNWNWNWNWNWN
+WNWNWNWNWNWNWNWNW
+plan y=2..3 x=74..90 z=139
+N.N.N.N.N.N.N.N.N
+plan y=4 x=74..90 z=139
+Q.A.Q.O.O.Q.A.Q.Q
+plan y=2 x=74..90 z=141
+N.N.N.N.N.N.N.N.N
+plan y=2..3 x=74..90 z=155
+W.W.W.W.W.W.W.W.W
+plan y=4 x=74..90 z=155
+Q.A.Q.O.O.Q.A.Q.Q
+plan y=2 x=74..90 z=153
+W.W.W.W.W.W.W.W.W
+plan y=9 x=73..90 z=138..155
+ggg...ggg...ggg...
+g.g...g.g...g.g...
+ggg...ggg...ggg...
+..................
+...ggg...ggg...ggg
+...g.g...g.g...g.g
+...ggg...ggg...ggg
+..................
+ggg...ggg...ggg...
+g.g...g.g...g.g...
+ggg...ggg...ggg...
+..................
+...ggg...ggg...ggg
+...g.g...g.g...g.g
+...ggg...ggg...ggg
+..................
+ggg...ggg...ggg...
+ggg...ggg...ggg...
+plan y=10..13 x=73 z=138..155
+V
+V
+V
+.
+V
+V
+V
+.
+V
+V
+V
+.
+V
+V
+V
+.
+V
+V
+plan y=21 x=75..88 z=140..151
+.+...+...+....
+..............
+...+...+...+..
+..............
+.+...+...+....
+..............
+...+...+...+..
+..............
+.+...+...+....
+..............
+...+...+...+..
+..............
+plan y=17 x=80..84 z=151
+f.f.f
+// Eighty-metre Chamber of Secrets, Salazar monument and basilisk.
+at 5 0 55 chamber_bay
+at 5 0 75 chamber_bay
+at 5 0 95 chamber_bay
+at 5 0 115 chamber_bay
+face south z=135 x=6..28 y=1..9
+MMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMQQQQQQQQQQQMMMMMM
+MMMMMQQSSSSSSSSSQQMMMMM
+MMMMQQSSsSSSSSsSSQQMMMM
+MMMMQQSSSSSMSSSSSQQMMMM
+MMMMMQQSSSSMSSSSQQMMMMM
+MMMMMMQQSSSSSSSQQMMMMMM
+MMMMMMMQQ.....QQMMMMMMM
+MMMMMMMQQ.....QQMMMMMMM
+plan y=2 x=14..20 z=116..129
+mmm....
+..mmm..
+....mmm
+....mmm
+..mmm..
+mmm....
+mmm....
+..mmm..
+....mmm
+....mmm
+..mmm..
+mmmmmmm
+mmmmmmm
+mmmmmmm
+plan y=3..4 x=14..20 z=127..129
+mmmmmmm
+mmmmmmm
+mmmmmmm
+plan y=5 x=14..20 z=127..129
+.mmmmm.
+.smmms.
+..mmm..
+// Interconnecting ground-level walks, courtyards and entrance approach.
+at 45 0 48 walk
+at 70 0 60 walk
+at 95 0 60 walk
+at 120 0 60 walk
+at 145 0 60 walk
+at 170 0 35 walk turn=90
+at 170 0 60 walk turn=90
+at 170 0 85 walk turn=90
+at 170 0 110 walk turn=90
+at 170 0 135 walk turn=90
+at 66 0 60 walk turn=90
+at 66 0 85 walk turn=90
+at 66 0 110 walk turn=90
+at 70 0 130 walk
+at 95 0 130 walk
+at 120 0 130 walk
+at 45 0 160 walk
+at 70 0 160 walk
+at 95 0 160 walk
+at 120 0 160 walk
+at 145 0 160 walk
+at 110 0 65 court
+at 110 0 90 court
+at 110 0 115 court
+at 90 0 165 walk turn=90
+at 5 0 45 walk
+at 5 0 50 walk
+at 30 0 125 walk
+at 50 0 125 walk
+// Fountain and cloister pillars in the clock courtyard.
+plan y=1 x=117..127 z=91..101
+...QQQQQ...
+.QQwwwwwQQ.
+.QwwwwwwwQ.
+QwwwwwwwwwQ
+QwwwwwwwwwQ
+QwwwwQwwwwQ
+QwwwwwwwwwQ
+QwwwwwwwwwQ
+.QwwwwwwwQ.
+.QQwwwwwQQ.
+...QQQQQ...
+plan y=2..4 x=122 z=96
+Q
+plan y=5 x=120..124 z=94..98
+..w..
+.www.
+wwQww
+.www.
+..w..
+part cloister_column 3 10 3
+plan y=0
+QQQ
+QQQ
+QQQ
+plan y=1..7 x=1 z=1
+T
+plan y=8..9
+QQQ
+QQQ
+QQQ
+end
+at 110 1 66 cloister_column
+at 120 1 66 cloister_column
+at 130 1 66 cloister_column
+at 110 1 116 cloister_column
+at 120 1 116 cloister_column
+at 130 1 116 cloister_column
+plan y=11 x=110..132 z=66..68
+rrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrr
+plan y=11 x=110..132 z=116..118
+rrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrr
+face south z=135 x=150..164 y=17..27
+.....OOOOO.....
+...OOWWWWWOO...
+..OWWWWWWWWWO..
+.OWWWWWWWWWWWO.
+OWWWWWWNWWWWWWO
+OWWWWWWNNNNWWWO
+OWWWWWWNWWWWWWO
+.OWWWWWWWWWWWO.
+..OWWWWWWWWWO..
+...OOWWWWWOO...
+.....OOOOO.....
+// Greenhouses and grounds.
+at 110 0 5 greenhouse
+at 125 0 5 greenhouse
+at 140 0 5 greenhouse
+at 105 0 30 walk
+at 130 0 30 walk
+at 180 0 170 walk
+at 205 0 170 walk
+at 207 0 180 tree
+at 224 0 176 tree
+at 242 0 185 tree
+at 210 0 199 tree
+at 228 0 198 tree
+at 241 0 215 tree
+at 217 0 219 tree
+at 197 0 222 tree
+at 165 0 185 tree
+// Whomping Willow: extended gnarled arms and hanging foliage.
+at 165 0 185 tree
+plan y=7 x=162..180 z=190
+V.ttttttttttttttttV
+plan y=9 x=170 z=181..203
+t
+t
+t
+t
+t
+t
+t
+t
+t
+t
+t
+t
+t
+t
+t
+t
+t
+t
+t
+t
+t
+t
+t
+plan y=5..8 x=162 z=190
+V
+plan y=6..10 x=180 z=190
+V
+// Quidditch pitch, six gold rings and spectator stands.
+at 195 0 45 pitch_tile
+at 206 0 45 pitch_tile
+at 217 0 45 pitch_tile
+at 228 0 45 pitch_tile
+at 239 0 45 pitch_tile
+at 195 0 60 pitch_tile
+at 206 0 60 pitch_tile
+at 217 0 60 pitch_tile
+at 228 0 60 pitch_tile
+at 239 0 60 pitch_tile
+at 195 0 75 pitch_tile
+at 206 0 75 pitch_tile
+at 217 0 75 pitch_tile
+at 228 0 75 pitch_tile
+at 239 0 75 pitch_tile
+at 195 0 90 pitch_tile
+at 206 0 90 pitch_tile
+at 217 0 90 pitch_tile
+at 228 0 90 pitch_tile
+at 239 0 90 pitch_tile
+at 195 0 105 pitch_tile
+at 206 0 105 pitch_tile
+at 217 0 105 pitch_tile
+at 228 0 105 pitch_tile
+at 239 0 105 pitch_tile
+at 195 0 120 pitch_tile
+at 206 0 120 pitch_tile
+at 217 0 120 pitch_tile
+at 228 0 120 pitch_tile
+at 239 0 120 pitch_tile
+at 200 0 48 hoop
+at 218 0 48 hoop
+at 236 0 48 hoop
+at 200 0 131 hoop
+at 218 0 131 hoop
+at 236 0 131 hoop
+at 250 0 45 stand
+at 250 0 60 stand
+at 250 0 75 stand
+at 250 0 90 stand
+at 250 0 105 stand
+at 250 0 120 stand
+at 189 0 45 stand flip=x
+at 189 0 60 stand flip=x
+at 189 0 105 stand flip=x
+at 189 0 120 stand flip=x
+plan y=1 x=196..248 z=89
+YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY
+plan y=1 x=215..229 z=83..96
+.....YYYYY.....
+...YY.....YY...
+..Y.........Y..
+.Y...........Y.
+Y.............Y
+Y.............Y
+YYYYYYYYYYYYYYY
+Y.............Y
+Y.............Y
+.Y...........Y.
+..Y.........Y..
+...YY.....YY...
+.....YYYYY.....
+...............
+// Black Lake and covered wooden bridge to the far grounds.
+at 50 0 184 lake
+at 66 0 184 lake
+at 82 0 184 lake
+at 98 0 184 lake
+at 114 0 184 lake
+at 50 0 200 lake
+at 66 0 200 lake
+at 82 0 200 lake
+at 98 0 200 lake
+at 114 0 200 lake
+at 50 0 216 lake
+at 66 0 216 lake
+at 82 0 216 lake
+at 98 0 216 lake
+at 114 0 216 lake
+at 147 0 149 covered_bridge
+at 147 0 165 covered_bridge
+at 147 0 181 covered_bridge
+at 147 0 197 covered_bridge
+plan y=1 x=148..154 z=148
+^^^^^^^
+plan y=1 x=148..154 z=213
+vvvvvvv
+at 135 0 214 walk
+at 160 0 214 walk
+// Hagrid's furnished stone hut and pumpkin patch.
+plan y=0 x=182..194 z=183..195
+SSSSSSSSSSSSS
+SPPPPPPPPPPPS
+SPPPPPPPPPPPS
+SPPPPPPPPPPPS
+SPPPPPPPPPPPS
+SPPPPPPPPPPPS
+SPPPPPPPPPPPS
+SPPPPPPPPPPPS
+SPPPPPPPPPPPS
+SPPPPPPPPPPPS
+SPPPPPPPPPPPS
+SPPPPPPPPPPPS
+SSSSSSSSSSSSS
+face south z=183 x=182..194 y=1..6
+BBBBBBBBBBBBB
+BMMMMMMMMMMMB
+BMGGGMMMGGGMB
+BMGGGMMMGGGMB
+BMMMMMDMMMMMB
+BMMMMMDMMMMMB
+face south z=195 x=182..194 y=1..6
+BBBBBBBBBBBBB
+BMMMMMMMMMMMB
+BMMMGGGGGMMMB
+BMMMGGGGGMMMB
+BMMMMMMMMMMMB
+BMMMMMMMMMMMB
+face west x=182 z=184..194 y=1..6
+BBBBBBBBBBB
+MMMMMMMMMMM
+MMGGGGGGGMM
+MMGGGGGGGMM
+MMMMMMMMMMM
+MMMMMMMMMMM
+face west x=194 z=184..194 y=1..6
+BBBBBBBBBBB
+MMMMMMMMMMM
+MMGGGGGGGMM
+MMGGGGGGGMM
+MMMMMMMMMMM
+MMMMMMMMMMM
+plan y=7 x=181..195 z=182..196
+rrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrr
+plan y=8 x=183..193 z=184..194
+rrrrrrrrrrr
+rrrrrrrrrMr
+rrrrrrrrrrr
+rrrrrrrrrrr
+rrrrrrrrrrr
+rrrrrrrrrrr
+rrrrrrrrrrr
+rrrrrrrrrrr
+rrrrrrrrrrr
+rrrrrrrrrrr
+rrrrrrrrrrr
+plan y=9 x=185..191 z=186..192
+rrrrrrr
+rrrrrrr
+rrrrrrr
+rrrrrrr
+rrrrrrr
+rrrrrrr
+rrrrrrr
+plan y=10 x=187..189 z=188..190
+rrr
+rrr
+rrr
+plan y=1 x=184..192 z=185..193
+C......FF
+.......FF
+bb.......
+bb.......
+.........
+...PPP...
+.u.PLP.j.
+...PPP...
+q.......C
+plan y=5 x=188 z=189
+l
+plan y=8..13 x=192 z=185
+M
+plan y=14 x=192 z=185
+%
+plan y=0 x=196..205 z=184..197
+aaaaaaaaaa
+aaaaaaaaaa
+aaaaaaaaaa
+aaaaaaaaaa
+aaaaaaaaaa
+aaaaaaaaaa
+aaaaaaaaaa
+aaaaaaaaaa
+aaaaaaaaaa
+aaaaaaaaaa
+aaaaaaaaaa
+aaaaaaaaaa
+aaaaaaaaaa
+aaaaaaaaaa
+plan y=1 x=196..205 z=184..197
+ffffffffff
+f.(..(..(f
+f........f
+f..(..(..f
+f........f
+f.(..(..(f
+f........f
+f..(..(..f
+f........f
+f.(..(..(f
+f........f
+f..(..(..f
+f........f
+ffff..ffff
+// Boathouse: open slipways, quay, boats and a high gable roof.
+plan y=1 x=85..109 z=179..202
+PPPPPPPPPPPPPPPPPPPPPPPPP
+PPPPPPPPPPPPPPPPPPPPPPPPP
+PPPPPPPPPPPPPPPPPPPPPPPPP
+PPPPPPPPPPPPPPPPPPPPPPPPP
+PPPPPPPPPPPPPPPPPPPPPPPPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+PPP.......PPPPP.......PPP
+face west x=85 z=179..202 y=2..10
+BBBBBBBBBBBBBBBBBBBBBBBB
+BGGGGGBGGGGGGBGGGGGGGGGB
+BGGGGGBGGGGGGBGGGGGGGGGB
+BGGGGGBGGGGGGBGGGGGGGGGB
+BGGGGGBGGGGGGBGGGGGGGGGB
+BSSSSSBSSSSSSBSSSSSSSSSB
+BSSSSSBSSSSSSBSSSSSSSSSB
+BSSSSSBSSSSSSBSSSSSSSSSB
+BSSSSSBSSSSSSBSSSSSSSSSB
+face west x=109 z=179..202 y=2..10
+BBBBBBBBBBBBBBBBBBBBBBBB
+BGGGGGBGGGGGGBGGGGGGGGGB
+BGGGGGBGGGGGGBGGGGGGGGGB
+BGGGGGBGGGGGGBGGGGGGGGGB
+BGGGGGBGGGGGGBGGGGGGGGGB
+BSSSSSBSSSSSSBSSSSSSSSSB
+BSSSSSBSSSSSSBSSSSSSSSSB
+BSSSSSBSSSSSSBSSSSSSSSSB
+BSSSSSBSSSSSSBSSSSSSSSSB
+part boathouse_roof 25 14 1
+face south z=0
+............r
+............R
+...........>R<
+..........>...<
+.........>.....<
+........>.......<
+.......>.........<
+......>...........<
+.....>.............<
+....>...............<
+...>.................<
+..>...................<
+.>.....................<
+>.......................<
+end
+at 85 11 179 boathouse_roof
+at 85 11 180 boathouse_roof
+at 85 11 181 boathouse_roof
+at 85 11 182 boathouse_roof
+at 85 11 183 boathouse_roof
+at 85 11 184 boathouse_roof
+at 85 11 185 boathouse_roof
+at 85 11 186 boathouse_roof
+at 85 11 187 boathouse_roof
+at 85 11 188 boathouse_roof
+at 85 11 189 boathouse_roof
+at 85 11 190 boathouse_roof
+at 85 11 191 boathouse_roof
+at 85 11 192 boathouse_roof
+at 85 11 193 boathouse_roof
+at 85 11 194 boathouse_roof
+at 85 11 195 boathouse_roof
+at 85 11 196 boathouse_roof
+at 85 11 197 boathouse_roof
+at 85 11 198 boathouse_roof
+at 85 11 199 boathouse_roof
+at 85 11 200 boathouse_roof
+at 85 11 201 boathouse_roof
+at 85 11 202 boathouse_roof
+part launch 5 2 7
+plan y=0
+..p..
+.ppp.
+ppppp
+ppppp
+ppppp
+.ppp.
+..p..
+plan y=1
+..f..
+.f.f.
+f...f
+fpppf
+f...f
+.f.f.
+..f..
+end
+at 89 2 188 launch
+at 101 2 190 launch
+at 61 1 208 launch
+at 114 1 216 launch
+plan y=2 x=87..107 z=180
+CC...q....L....q...CC
+plan y=7 x=97 z=183
+l
+plan y=7 x=97 z=194
+l
