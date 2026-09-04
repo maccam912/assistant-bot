@@ -39,6 +39,7 @@ public class BuildStructure {
     private final int sizeZ;
     private final boolean allowFloating;
     private final boolean preserveTerrain;
+    private Map<Cell, Integer> sourceLines = Map.of();
     private VxbDiagnostics.DiagnosticResult diagnostics;
     private String name = "structure";
     private List<String> notes = List.of();
@@ -74,6 +75,7 @@ public class BuildStructure {
     public int getSizeZ() { return sizeZ; }
     public boolean isFloatingAllowed() { return allowFloating; }
     public boolean shouldPreserveTerrain() { return preserveTerrain; }
+    public Integer getSourceLine(Cell cell) { return sourceLines.get(cell); }
     public void setDiagnostics(VxbDiagnostics.DiagnosticResult diagnostics) { this.diagnostics = diagnostics; }
     public String getName() { return name; }
     /** Non-fatal things the compiler decided for the author, surfaced as warnings. */
@@ -139,7 +141,8 @@ public class BuildStructure {
         }
 
         Vxb2Parser.Parsed resolved = new Vxb2Parser.Parsed(parsed.name(), parsed.sizeX(), parsed.sizeY(),
-                parsed.sizeZ(), parsed.ground(), parsed.preserveTerrain(), palette, parsed.hints(), parsed.grid(), notes);
+                parsed.sizeZ(), parsed.ground(), parsed.preserveTerrain(), palette, parsed.hints(), parsed.grid(),
+                parsed.sourceLines(), notes);
         Vxb2Inference.Result inferred = Vxb2Inference.infer(resolved);
 
         if (inferred.blocks().isEmpty() && inferred.clearCells().isEmpty()) {
@@ -154,6 +157,7 @@ public class BuildStructure {
                 !parsed.ground(), parsed.preserveTerrain());
         structure.name = parsed.name();
         structure.notes = List.copyOf(inferred.notes());
+        structure.sourceLines = Map.copyOf(parsed.sourceLines());
         Map<String, Character> glyphs = new LinkedHashMap<>();
         for (Map.Entry<Character, String> entry : palette.entrySet()) {
             glyphs.putIfAbsent(BlockIdResolver.normalizeBaseId(entry.getValue()), entry.getKey());

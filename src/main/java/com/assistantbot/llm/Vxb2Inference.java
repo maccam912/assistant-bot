@@ -256,7 +256,13 @@ public final class Vxb2Inference {
     }
 
     private static PlacementGroup fixture(int index, Cell cell, String blockState, Cell support) {
-        return new PlacementGroup("x" + index, "fixture",
+        String kind = path(blockState);
+        if (kind.endsWith("wall_torch")) kind = "wall torch";
+        else if (kind.endsWith("torch")) kind = "torch";
+        else if (kind.endsWith("lantern")) kind = "lantern";
+        else if (kind.equals("ladder")) kind = "ladder";
+        else kind = "fixture";
+        return new PlacementGroup("x" + index, kind,
                 List.of(new BlockEntry(cell.x(), cell.y(), cell.z(), blockState)), List.of(support), false);
     }
 

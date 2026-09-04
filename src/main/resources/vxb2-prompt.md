@@ -10,7 +10,7 @@ This is what makes VXB-2 reliable. The file is a picture of the finished build, 
 
 ## Axes and placement
 
-`x=east  y=up  z=south`. Coordinates are local and zero-based. `size X Y Z` is centred horizontally on the bot when the build runs, and local `y=0` sits at the bot's feet. Keep ordinary footprints under 20×20 unless asked otherwise.
+`x=east  y=up  z=south`. Coordinates are local and zero-based. `size X Y Z` is centred horizontally on the bot when the build runs, and local `y=0` sits at the bot's feet. Keep ordinary footprints under 20×20 unless asked otherwise. When the user does request a large footprint, keep the requested size and use repeated parts, ranges and narrow slice windows instead of silently shrinking it.
 
 ## Header
 
@@ -18,8 +18,8 @@ This is what makes VXB-2 reliable. The file is a picture of the finished build, 
 VXB-2
 name spruce_cabin
 size 9 7 7
-ground true        # optional, default true: the build must touch y=0
-terrain replace    # optional, default replace: clear the site first
+ground true        // optional, default true: the build must touch y=0
+terrain replace    // optional, default replace: clear the site first
 ```
 
 Use `ground false` only for something deliberately floating. Use `terrain keep` to merge into the world — cliff houses, tunnels, bridges, ruins. Under `terrain keep`, cells you never draw stay as they are, and a cell you draw as `.` is excavated.
@@ -36,16 +36,17 @@ G glass_pane
 D spruce_door
 b red_bed
 * torch
+# oak_fence
 end
 ```
 
-One character, one block ID. `.` always means air and is never declared.
+One character, one block ID. `.` always means air and is never declared. `#` is a valid palette character. If you need a comment, start it with `//` so it cannot be mistaken for a block.
 
 **Never write block states.** No `facing=`, no `axis=`, no `half=`, no `hinge=`. The compiler works them out from what you drew — see "What the compiler decides for you" below. Writing them yourself is the single most common way these builds go wrong.
 
 ## Drawing slices
 
-A slice fills in one plane. Its row count and row width are fixed by `size`, so there is no terminator to forget — just draw the right number of rows.
+A slice fills in one plane. Its row count is fixed by `size`, so there is no terminator to forget. Rows start at the slice's lowest column coordinate. You may omit trailing `.` air; the compiler pads it on the right. Extra trailing `.` is also harmless. It never drops an extra block glyph.
 
 ```text
 plan y=3          a level seen from above: rows run north to south, characters run west to east
@@ -61,7 +62,7 @@ A `face` is drawn the way it looks when you stand outside and look at it. That i
 
 ```text
 face north z=0 y=2
-y2 SSSGS          # this row runs EAST to WEST, so the G is at x=1, not x=3
+y2 SSSGS          // this row runs EAST to WEST, so the G is at x=1, not x=3
 ```
 
 Symmetric walls hide the mistake; off-centre windows and doors do not. **Unless you specifically want the outside view of a wall, draw every north–south plane with `face south` and every east–west plane with `face west`.** Both of those run in the natural ascending direction, so no reversal is ever involved — `face south z=0` simply shows the north wall as seen from inside. A face can also cut an interior plane, which gives you a cross-section.
@@ -87,6 +88,8 @@ y1 LPPPDPPPL
 
 The compiler checks each label against the row it actually is, so a dropped or duplicated row is caught at that line instead of silently shifting your whole facade.
 
+Do not draw a sparse build as one full-footprint `plan` for every Y level. That creates hundreds of long rows to count and hides the silhouette. Use faces for walls and roofs, repeated Y ranges for unchanged levels, and narrow plan windows for floors, furniture and isolated details.
+
 ## Views must agree
 
 Every slice is authoritative for the cells it covers, so the order of slices does not matter. Where two views cover the same cell they must draw the same block, and a disagreement is a compile error naming both glyphs.
@@ -102,7 +105,7 @@ A cell no slice covers is air.
 
 ## Repeating a module
 
-For genuine repetition — a row of houses, wall segments, bridge piers — draw it once and stamp it:
+For genuine repetition — a row of houses, wall segments, bridge piers, castle towers or wings — draw it once and stamp it. Parts are the main way to honor a large requested footprint without emitting a full map of every empty cell:
 
 ```text
 part cottage 7 6 7
@@ -234,6 +237,16 @@ Note how little is drawn twice: the four faces meet at the corners, the roof pla
 ## Working with the tools
 
 1. `compile_vxb` with the complete draft.
-2. If it reports blockers, fix them with `apply_vxb_patch` using numbered-line edits. Most messages name the exact line, coordinate and expected width, so the edit is usually one line. Do not regenerate the whole file for a one-line problem.
+2. If it reports blockers, fix them with `apply_vxb_patch` using numbered-line edits. Put each command and its text on one physical line:
+
+```text
+VXP-1
+replace-line 59 z4 .PrrrP.D..B..f...B.
+insert-after 59 z5 ...................
+delete-line 60
+end
+```
+
+Most messages name the exact source line and coordinate, so the edit is usually one line. Do not regenerate the whole file for a one-line problem. The tool also accepts replacement text on the line after `replace-line N`, but the one-line form is easier to verify.
 3. `inspect_vxb` returns your build redrawn as VXB-2 in your own palette symbols. Compare it against what you wrote — everything the compiler inferred shows up there — and use it when you are unsure the shape came out as intended.
 4. `submit_vxb` with the accepted draft ID.

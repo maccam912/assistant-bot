@@ -8,10 +8,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.assistantbot.llm.BuildStructure.BlockEntry;
 import com.assistantbot.llm.BuildStructure.Cell;
 import com.assistantbot.llm.BuildStructure.PlacementGroup;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class Vxb2CompilerTest {
+
+    @Test
+    void geminiCastleFromFailureLogGetsPastRecoverableTextMistakes() throws IOException {
+        String source;
+        try (var stream = getClass().getResourceAsStream("/vxb2/gemini-castle-from-log.vxb")) {
+            if (stream == null) throw new AssertionError("Missing Gemini regression fixture");
+            source = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        VxbDiagnostics.DiagnosticResult result = VxbDiagnostics.run(source);
+        assertTrue(result.getBlockers().stream().noneMatch(diagnostic -> diagnostic.checkName().equals("VXB-2 Syntax")),
+                result.getLlmReport());
+        assertTrue(result.getLlmReport().contains("missing trailing cells were read as air"), result.getLlmReport());
+    }
 
     /** The worked example shipped in the model prompt. If this breaks, the prompt lies. */
     static final String CABIN = """
@@ -176,19 +191,51 @@ class Vxb2CompilerTest {
     }
 
     @Test
-    void rowWidthMismatchNamesTheRowAndTheExpectedWidth() {
+    void missingAndExtraTrailingAirAreCorrectedWithoutMovingDrawnCells() {
+        VxbCompiler.Compilation compilation = VxbCompiler.compile("""
+                VXB-2
+                size 4 1 2
+                pal
+                S stone
+                end
+                plan y=0
+                SSS
+                SSSS..
+                """);
+        assertEquals(7, compilation.structure().getBlocks().size());
+        assertEquals("minecraft:stone", at(compilation.structure(), 2, 0, 0).blockId());
+        assertTrue(compilation.diagnostics().getLlmReport().contains("missing trailing cells were read as air"));
+        assertTrue(compilation.diagnostics().getLlmReport().contains("extra trailing air"));
+    }
+
+    @Test
+    void overlongDrawnRowStillFailsRatherThanDroppingBlocks() {
         VxbCompiler.CompilationException error = assertThrows(VxbCompiler.CompilationException.class,
                 () -> VxbCompiler.compile("""
                         VXB-2
-                        size 4 1 2
+                        size 3 1 1
                         pal
                         S stone
                         end
                         plan y=0
                         SSSS
-                        SSS
                         """));
-        assertTrue(error.getMessage().contains("exactly 4 characters wide but is 3"), error.getMessage());
+        assertTrue(error.getMessage().contains("only extra trailing '.' air"), error.getMessage());
+    }
+
+    @Test
+    void hashCanBeUsedAsAPaletteGlyphAndAtTheStartOfARow() {
+        BuildStructure structure = BuildStructure.parse("""
+                VXB-2
+                size 3 1 1
+                pal
+                # oak_fence
+                end
+                plan y=0
+                ### // fence row
+                """);
+        assertEquals(3, structure.getBlocks().size());
+        assertTrue(structure.getBlocks().stream().allMatch(block -> block.blockId().equals("minecraft:oak_fence")));
     }
 
     @Test
@@ -371,6 +418,44 @@ class Vxb2CompilerTest {
                 end
                 """);
         assertEquals("VXB-2\nname new\nsize 1 1 1\nground false", result);
+    }
+
+    @Test
+    void patchAcceptsReplacementTextOnTheFollowingLine() {
+        String result = VxbPatcher.apply("VXB-2\nname old\nsize 1 1 1", """
+                replace-line 2
+                name new
+                insert-after 3
+                ground false
+                """);
+        assertEquals("VXB-2\nname new\nsize 1 1 1\nground false", result);
+    }
+
+    @Test
+    void repairContextIncludesOnlyRowsNamedByDiagnostics() {
+        VxbDiagnostics.DiagnosticResult diagnostics = new VxbDiagnostics.DiagnosticResult();
+        diagnostics.add(VxbDiagnostics.Severity.BLOCKER, "Example", "bad row", 3);
+        assertEquals("3: size 1 1 1", VxbPatcher.repairContext(
+                "VXB-2\nname old\nsize 1 1 1\npal\nS stone\nend", diagnostics));
+    }
+
+    @Test
+    void semanticBlockersPointBackToTheDrawnSourceRow() {
+        VxbCompiler.CompilationException error = assertThrows(VxbCompiler.CompilationException.class,
+                () -> VxbCompiler.compile("""
+                        VXB-2
+                        size 1 2 1
+                        ground false
+                        pal
+                        * torch
+                        end
+                        plan y=0
+                        .
+                        plan y=1
+                        *
+                        """));
+        assertTrue(error.getMessage().contains("[line 8] Missing Fixture Support"), error.getMessage());
+        assertTrue(error.getMessage().contains("The torch at (0,1,0)"), error.getMessage());
     }
 
     private static BlockEntry at(BuildStructure structure, int x, int y, int z) {

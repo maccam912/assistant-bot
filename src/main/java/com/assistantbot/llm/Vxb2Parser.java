@@ -37,6 +37,7 @@ public final class Vxb2Parser {
                          Map<Character, String> palette,
                          Map<Character, Map<String, String>> hints,
                          Map<Cell, Character> grid,
+                         Map<Cell, Integer> sourceLines,
                          List<String> notes) {}
 
     private enum View { PLAN, SOUTH, NORTH, EAST, WEST }
@@ -61,7 +62,8 @@ public final class Vxb2Parser {
         if (ctx.palette.isEmpty()) throw new IllegalArgumentException("VXB-2 requires a 'pal' section with at least one symbol.");
         if (ctx.grid.isEmpty()) throw new IllegalArgumentException("VXB-2 produced no cells: no plan or face slices were drawn.");
         return new Parsed(ctx.name, ctx.sizeX, ctx.sizeY, ctx.sizeZ, ctx.ground, ctx.preserveTerrain,
-                Map.copyOf(ctx.palette), Map.copyOf(ctx.hints), ctx.grid, List.copyOf(ctx.notes));
+                Map.copyOf(ctx.palette), Map.copyOf(ctx.hints), ctx.grid, Map.copyOf(ctx.sourceLines),
+                List.copyOf(ctx.notes));
     }
 
     /**
@@ -127,7 +129,7 @@ public final class Vxb2Parser {
     private static void readPalette(Ctx ctx) {
         while (ctx.hasMore()) {
             int lineNumber = ctx.lineNumber();
-            String line = ctx.next();
+            String line = ctx.nextPalette();
             if (line == null) continue;
             String lower = line.toLowerCase(Locale.ROOT);
             if (lower.equals("end") || lower.equals("endpal") || lower.equals("endpalette")) return;
@@ -345,15 +347,26 @@ public final class Vxb2Parser {
                 body = body.replace(' ', '.');
                 ctx.note("Line " + rowLine + ": spaces in a grid row were read as air.");
             }
+            if (body.length() < slice.width()) {
+                int missing = slice.width() - body.length();
+                body = body + ".".repeat(missing);
+                ctx.note("Line " + rowLine + ": row was " + missing + " character(s) short; missing trailing cells were read as air.");
+            } else if (body.length() > slice.width()) {
+                String excess = body.substring(slice.width());
+                if (excess.chars().allMatch(character -> character == '.')) {
+                    body = body.substring(0, slice.width());
+                    ctx.note("Line " + rowLine + ": ignored " + excess.length() + " extra trailing air character(s).");
+                } else {
+                    throw error(rowLine, "Slice row must be at most " + slice.width()
+                            + " characters wide; only extra trailing '.' air may be omitted automatically. Row is "
+                            + body.length() + " characters: " + body);
+                }
+            }
             for (int i = 0; i < body.length(); i++) {
                 char symbol = body.charAt(i);
                 if (symbol != '.' && !ctx.palette.containsKey(symbol)) {
                     throw error(rowLine, "Symbol '" + symbol + "' is not in the palette. Row: " + body);
                 }
-            }
-            if (body.length() != slice.width()) {
-                throw error(rowLine, "Slice row must be exactly " + slice.width() + " characters wide but is "
-                        + body.length() + ". Row: " + body);
             }
             rows.add(body);
             rowLines.add(rowLine);
@@ -446,6 +459,7 @@ public final class Vxb2Parser {
                     + "): an earlier slice put '" + previous + "' there and " + origin + " puts '" + symbol
                     + "'. Every slice is authoritative, so overlapping views must draw the same block.");
         }
+        if (target == ctx.grid) ctx.sourceLines.putIfAbsent(cell, lineNumber);
     }
 
     // --- small helpers -------------------------------------------------------
@@ -552,6 +566,7 @@ public final class Vxb2Parser {
         private final Map<Character, String> palette = new LinkedHashMap<>();
         private final Map<Character, Map<String, String>> hints = new LinkedHashMap<>();
         private final Map<Cell, Character> grid = new HashMap<>();
+        private final Map<Cell, Integer> sourceLines = new HashMap<>();
         private final Map<String, Part> parts = new LinkedHashMap<>();
         private final List<String> notes = new ArrayList<>();
 
@@ -566,7 +581,7 @@ public final class Vxb2Parser {
                     cursor = i + 1;
                     return;
                 }
-                if (!line.isEmpty() && !line.startsWith("#")) break;
+                if (!line.isEmpty() && !line.startsWith("#") && !line.startsWith("//")) break;
             }
             note("No 'VXB-2' header line was found; parsed the body anyway.");
         }
@@ -582,17 +597,31 @@ public final class Vxb2Parser {
         /** Next meaningful command line with any trailing comment removed, or null for blanks. */
         String next() {
             String raw = lines[cursor++].trim();
-            if (raw.isEmpty() || raw.startsWith("#")) return null;
+            if (raw.isEmpty() || raw.startsWith("#") || raw.startsWith("//")) return null;
             int comment = raw.indexOf(" #");
+            int slashComment = raw.indexOf(" //");
+            if (comment < 0 || slashComment >= 0 && slashComment < comment) comment = slashComment;
             return comment > 0 ? raw.substring(0, comment).trim() : raw;
         }
 
-        /** Next grid row: comments are still skipped but the row body is never edited. */
+        /** Palette entries may legitimately use '#' as their one-character glyph. */
+        String nextPalette() {
+            String raw = lines[cursor++].trim();
+            if (raw.isEmpty() || raw.startsWith("//")) return null;
+            int hashComment = raw.indexOf(" #");
+            int slashComment = raw.indexOf(" //");
+            int comment = hashComment < 0 ? slashComment
+                    : slashComment < 0 ? hashComment : Math.min(hashComment, slashComment);
+            return comment > 0 ? raw.substring(0, comment).trim() : raw;
+        }
+
+        /** Grid rows preserve '#', which is a valid glyph; use '//' for row comments. */
         String nextRow() {
             String raw = lines[cursor++];
             String trimmed = raw.trim();
-            if (trimmed.isEmpty() || trimmed.startsWith("#")) return null;
-            return trimmed;
+            if (trimmed.isEmpty() || trimmed.startsWith("//")) return null;
+            int comment = trimmed.indexOf(" //");
+            return comment > 0 ? trimmed.substring(0, comment).trim() : trimmed;
         }
 
         void note(String message) {

@@ -64,9 +64,12 @@ public class LlmClient {
             'pal' section mapping one character to one block ID, ended by 'end'. Then slices:
             'plan y=N' is a level from above with rows running north to south and characters
             west to east; 'face south|north|east|west <axis>=N' is that side seen from outside,
-            rows top to bottom. Row and column counts come from 'size'. Options 'y=1..3',
+            rows top to bottom. Row and column counts come from 'size'; omitted trailing air is
+            padded on the right. Options 'y=1..3',
             'y=0,4' and windows such as 'x=1..7 z=1..5' narrow a slice. Slices may appear in any
             order; where two cover the same cell they must draw the same block. '.' is air.
+            Use parts, ranges and narrow windows to honor requested large sizes without drawing
+            every empty cell. '#' is a valid glyph and '//' starts a comment.
             Never write block states: the compiler infers stair facings, pillar axes, door
             hinges, torch mounting and slab halves from the drawing. Coordinates are local with
             x=east, y=up, z=south, and the declared size is centred on the bot. Output no
@@ -317,8 +320,10 @@ public class LlmClient {
                     toolResult.addProperty("accepted", false);
                     toolResult.addProperty("draft_id", draftId);
                     toolResult.addProperty("diagnostics", e.getMessage());
-                    if (draftSource != null) toolResult.addProperty("numbered_source", VxbPatcher.numbered(draftSource));
-                    toolResult.addProperty("next", "Call apply_vxb_patch with VXP-1 line edits, then compile_vxb only if replacing the entire design is truly necessary.");
+                    String repairContext = draftSource == null ? "" : VxbPatcher.repairContext(draftSource, e.diagnostics());
+                    if (!repairContext.isBlank()) toolResult.addProperty("repair_context", repairContext);
+                    toolResult.addProperty("patch_format", VxbPatcher.FORMAT_HELP);
+                    toolResult.addProperty("next", "Call apply_vxb_patch. Put each command and its replacement text on one line; do not resend the whole draft.");
                 } catch (IllegalArgumentException e) {
                     reportProgress(progressListener, "correcting tool call", turnLabel + " — " + e.getMessage());
                     toolResult.addProperty("accepted", false);
@@ -420,8 +425,9 @@ public class LlmClient {
         JsonArray tools = new JsonArray();
         tools.add(functionTool("compile_vxb", "Compile and validate a complete VXB-2 draft.", "vxb",
                 "Complete VXB-2 source text"));
-        tools.add(functionTool("apply_vxb_patch", "Apply a small VXP-1 numbered-line patch to the current draft and recompile it.", "patch",
-                "VXP-1 text using replace-line, delete-line, and insert-after"));
+        tools.add(functionTool("apply_vxb_patch", "Apply numbered-line edits to the current draft and recompile it. "
+                        + VxbPatcher.FORMAT_HELP, "patch",
+                "VXP-1 edits; keep every command and its replacement text on the same line"));
         tools.add(functionTool("inspect_vxb", "Redraw the accepted draft as VXB-2 slices so you can compare it against what you wrote.", "draft_id",
                 "Draft ID returned by compile_vxb"));
         tools.add(functionTool("submit_vxb", "Submit an accepted draft as the final Minecraft build plan.", "draft_id",

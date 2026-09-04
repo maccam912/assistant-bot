@@ -13,8 +13,10 @@ public final class VxbCompiler {
             structure = BuildStructure.parse(source);
         } catch (IllegalArgumentException e) {
             VxbDiagnostics.DiagnosticResult failed = new VxbDiagnostics.DiagnosticResult();
-            failed.add(VxbDiagnostics.Severity.BLOCKER, "VXB-2 Syntax", e.getMessage(),
-                    VxbDiagnostics.lineNumber(e.getMessage()));
+            Integer line = VxbDiagnostics.lineNumber(e.getMessage());
+            String message = e.getMessage();
+            if (line != null) message = message.substring(message.indexOf(':') + 1).trim();
+            failed.add(VxbDiagnostics.Severity.BLOCKER, "VXB-2 Syntax", message, line);
             throw new CompilationException(failed.getLlmReport(), failed);
         }
 

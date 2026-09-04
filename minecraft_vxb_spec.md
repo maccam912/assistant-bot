@@ -57,10 +57,11 @@ in mind — the thing that could not be checked at all when geometry arrived as
 opaque primitive calls.
 
 **Row and column counts come from `size`.** A slice reads exactly as many rows as
-its plane is deep, so there is no terminator to forget, and a short row is
-reported at its own line with the expected width. Optional `z3`/`y5` row labels
-are verified against the coordinate they claim, which turns a dropped row from a
-silently shifted facade into a named error.
+its plane is deep, so there is no terminator to forget. Rows anchor at the lowest
+column coordinate; missing trailing air is padded and extra trailing dots are
+ignored with a compiler warning. Extra block glyphs are never discarded.
+Optional `z3`/`y5` row labels are verified against the coordinate they claim,
+which turns a dropped row from a silently shifted facade into a named error.
 
 **Block states are not writable.** The palette maps one character to one block
 ID. `facing`, `axis`, `half`, `hinge`, `type`, `part` and `shape` are derived
@@ -129,9 +130,9 @@ directly comparable to the source rather than a separate projection notation.
 ```text
 VXB-2
 name spruce_cabin
-size 9 7 7          # required; also fixes every slice's row and column count
-ground true         # default true: the build must connect to y=0
-terrain replace     # default replace; 'keep' leaves undrawn cells as world terrain
+size 9 7 7          // required; also fixes every slice's row and column count
+ground true         // default true: the build must connect to y=0
+terrain replace     // default replace; 'keep' leaves undrawn cells as world terrain
 ```
 
 Under `terrain keep`, a cell drawn as `.` is excavated and a cell no slice covers

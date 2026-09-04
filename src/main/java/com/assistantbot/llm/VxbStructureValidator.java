@@ -80,9 +80,12 @@ public final class VxbStructureValidator {
                 // which the plan is allowed to lean on, so that case is advisory rather than fatal.
                 VxbDiagnostics.Severity severity = structure.shouldPreserveTerrain()
                         ? VxbDiagnostics.Severity.WARNING : VxbDiagnostics.Severity.BLOCKER;
+                Integer sourceLine = structure.getSourceLine(support);
+                if (sourceLine == null) sourceLine = structure.getSourceLine(firstCell(group));
                 result.add(severity, "Missing Fixture Support",
                         "The " + group.kind() + " at " + format(firstCell(group)) + " needs a solid block at "
-                                + format(support) + ". Draw one there, or move the fixture against a wall.", null);
+                                + format(support) + ". Draw one there, or move the fixture against a wall.",
+                        sourceLine);
             }
         }
     }
@@ -127,7 +130,8 @@ public final class VxbStructureValidator {
         }
         result.add(VxbDiagnostics.Severity.BLOCKER, "Ungrounded Structure Component",
                 (grid.size() - reached.size()) + " blocks in " + components + " component(s) are not connected to y=0; example "
-                        + format(example) + ". Draw something connecting it down, or set 'ground false' if it is meant to float.", null);
+                        + format(example) + ". Draw something connecting it down, or set 'ground false' if it is meant to float.",
+                structure.getSourceLine(example));
     }
 
     private static void validateFeatureClearance(BuildStructure structure, Map<Cell, BlockEntry> grid,
@@ -144,7 +148,8 @@ public final class VxbStructureValidator {
                         if (inside(structure, clearance) && grid.containsKey(clearance)) {
                             result.add(VxbDiagnostics.Severity.BLOCKER, "Blocked Doorway",
                                     "The door at " + format(firstCell(group)) + " is blocked by a block at "
-                                            + format(clearance) + "; a doorway needs two blocks of headroom on both sides.", null);
+                                            + format(clearance) + "; a doorway needs two blocks of headroom on both sides.",
+                                    structure.getSourceLine(clearance));
                         }
                     }
                 }
