@@ -16,8 +16,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * HTTP client for calling an LLM via OpenRouter's OpenAI-compatible API.
@@ -48,6 +51,10 @@ public class LlmClient {
 
     /** 3 minute timeout — if the LLM hasn't responded by then, the request has failed. */
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(180);
+    private static final int MAX_VXB_TOOL_TURNS = 12;
+    private static final Pattern REQUESTED_DIMENSIONS = Pattern.compile(
+            "(?i)(?:^|[^0-9])(\\d{2,4})\\s*(?:x|by)\\s*(\\d{2,4})"
+                    + "(?:\\s*(?:x|by)\\s*(\\d{2,4}))?");
 
     /** Path to the mounted ConfigMap file containing the model name. */
     private static final String MODEL_FILE_PATH = "/config/openrouter/openrouter-model";
@@ -205,6 +212,12 @@ public class LlmClient {
         String model = readModel();
         String url = baseUrl.replaceAll("/+$", "") + "/chat/completions";
 
+        return runToolLoop(url, apiKey, model, description, terrainContext, progressListener);
+    }
+
+    /** Package-visible seam for deterministic protocol tests without a network request. */
+    BuildStructure runToolLoop(String url, String apiKey, String model, String description,
+                               String terrainContext, Consumer<Progress> progressListener) throws Exception {
         JsonArray messages = new JsonArray();
         messages.add(message("system", SYSTEM_PROMPT));
         messages.add(message("user", buildUserMessage(description, terrainContext)));
@@ -212,15 +225,15 @@ public class LlmClient {
         String draftSource = null;
         String draftId = null;
         BuildStructure compiled = null;
-        for (int turn = 0; turn < 8; turn++) {
-            String turnLabel = "turn " + (turn + 1) + "/8";
+        for (int turn = 0; turn < MAX_VXB_TOOL_TURNS; turn++) {
+            String turnLabel = "turn " + (turn + 1) + "/" + MAX_VXB_TOOL_TURNS;
             reportProgress(progressListener, turn == 0 ? "generating" : "revising",
                     turnLabel + " — waiting for model response");
             JsonObject body = new JsonObject();
             body.addProperty("model", model);
             body.add("messages", messages);
             body.add("tools", buildVxbTools());
-            body.addProperty("tool_choice", "auto");
+            body.addProperty("tool_choice", "required");
             body.addProperty("parallel_tool_calls", false);
             body.addProperty("stream", false);
 
@@ -233,18 +246,16 @@ public class LlmClient {
             if (calls == null || calls.isEmpty()) {
                 String content = assistant.has("content") && !assistant.get("content").isJsonNull()
                         ? assistant.get("content").getAsString() : "";
-                if (compiled != null) {
-                    reportProgress(progressListener, "complete", "model finished with accepted draft " + draftId);
-                    return compiled;
-                }
-                if (!content.isBlank()) {
-                    reportProgress(progressListener, "compiling", turnLabel + " — validating final text draft");
-                    BuildStructure structure = VxbCompiler.compile(content).structure();
-                    reportProgress(progressListener, "complete", "accepted final text draft with "
-                            + structure.getBlocks().size() + " blocks");
-                    return structure;
-                }
-                throw new IllegalArgumentException("LLM stopped without compiling or submitting a VXB draft");
+                JsonObject assistantHistory = assistant.deepCopy();
+                assistantHistory.addProperty("role", "assistant");
+                messages.add(assistantHistory);
+                String reminder = compiled == null
+                        ? "You have not submitted a build. Call compile_vxb with the complete build requested by the user; do not use it for tests or fragments."
+                        : "Draft " + draftId + " is mechanically valid but NOT submitted. If and only if it is the complete build requested by the user, call submit_vxb with that draft_id. Otherwise call compile_vxb with the complete requested build. Do not submit a test, prototype, palette check, or fragment.";
+                if (!content.isBlank()) reminder += " Do not answer with prose or raw VXB while tools are available.";
+                messages.add(message("user", reminder));
+                reportProgress(progressListener, "awaiting submission", turnLabel + " — explicit submit_vxb still required");
+                continue;
             }
 
             JsonObject assistantHistory = assistant.deepCopy();
@@ -276,11 +287,18 @@ public class LlmClient {
                             VxbCompiler.Compilation compilation = VxbCompiler.compile(draftSource);
                             compiled = compilation.structure();
                             draftId = draftId(draftSource);
-                            toolResult.addProperty("accepted", true);
+                            toolResult.addProperty("valid", true);
                             toolResult.addProperty("draft_id", draftId);
+                            toolResult.addProperty("draft_name", compiled.getName());
+                            toolResult.addProperty("declared_size", compiled.getSizeX() + " "
+                                    + compiled.getSizeY() + " " + compiled.getSizeZ());
                             toolResult.addProperty("blocks", compiled.getBlocks().size());
                             toolResult.addProperty("placement_groups", BuildStructure.planPlacementGroups(compiled).size());
                             toolResult.addProperty("warnings", compilation.diagnostics().getLlmReport());
+                            toolResult.addProperty("submitted", false);
+                            String mismatch = requestMismatch(description, compiled);
+                            if (mismatch != null) toolResult.addProperty("request_mismatch", mismatch);
+                            toolResult.addProperty("next", "This only validated the draft. Submit it only if it fully implements the user's original description; otherwise compile the complete build. Never use compile_vxb for tests or fragments.");
                         }
                         case "apply_vxb_patch" -> {
                             reportProgress(progressListener, "repairing", turnLabel + " — applying a draft patch");
@@ -289,10 +307,17 @@ public class LlmClient {
                             VxbCompiler.Compilation compilation = VxbCompiler.compile(draftSource);
                             compiled = compilation.structure();
                             draftId = draftId(draftSource);
-                            toolResult.addProperty("accepted", true);
+                            toolResult.addProperty("valid", true);
                             toolResult.addProperty("draft_id", draftId);
+                            toolResult.addProperty("draft_name", compiled.getName());
+                            toolResult.addProperty("declared_size", compiled.getSizeX() + " "
+                                    + compiled.getSizeY() + " " + compiled.getSizeZ());
                             toolResult.addProperty("blocks", compiled.getBlocks().size());
                             toolResult.addProperty("warnings", compilation.diagnostics().getLlmReport());
+                            toolResult.addProperty("submitted", false);
+                            String mismatch = requestMismatch(description, compiled);
+                            if (mismatch != null) toolResult.addProperty("request_mismatch", mismatch);
+                            toolResult.addProperty("next", "This only validated the draft. Submit it only if it fully implements the user's original description.");
                         }
                         case "inspect_vxb" -> {
                             reportProgress(progressListener, "inspecting", turnLabel + " — reviewing the compiled structure");
@@ -304,6 +329,8 @@ public class LlmClient {
                         case "submit_vxb" -> {
                             reportProgress(progressListener, "submitting", turnLabel + " — accepting validated draft " + draftId);
                             requireDraft(args, draftId, compiled);
+                            String mismatch = requestMismatch(description, compiled);
+                            if (mismatch != null) throw new IllegalArgumentException(mismatch);
                             AssistantMod.LOGGER.info("LLM submitted validated tool draft {} ({} blocks)", draftId,
                                     compiled.getBlocks().size());
                             reportProgress(progressListener, "complete", "accepted draft " + draftId + " with "
@@ -333,12 +360,8 @@ public class LlmClient {
                 if (visualPreview != null) messages.add(imageMessage(visualPreview));
             }
         }
-        if (compiled != null) {
-            reportProgress(progressListener, "complete", "accepted final compiled draft " + draftId + " with "
-                    + compiled.getBlocks().size() + " blocks after the tool-turn limit");
-            return compiled;
-        }
-        throw new IllegalArgumentException("LLM exceeded the 8-turn VXB tool limit without a valid submission");
+        throw new IllegalArgumentException("LLM exceeded the " + MAX_VXB_TOOL_TURNS
+                + "-turn VXB tool limit without explicitly submitting a complete draft");
     }
 
     private static void reportProgress(Consumer<Progress> listener, String step, String detail) {
@@ -360,7 +383,7 @@ public class LlmClient {
         return message.toString();
     }
 
-    private JsonObject sendChatRequest(String url, String apiKey, JsonObject body, boolean toolsEnabled) throws Exception {
+    JsonObject sendChatRequest(String url, String apiKey, JsonObject body, boolean toolsEnabled) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json")
@@ -423,14 +446,16 @@ public class LlmClient {
 
     private static JsonArray buildVxbTools() {
         JsonArray tools = new JsonArray();
-        tools.add(functionTool("compile_vxb", "Compile and validate a complete VXB-2 draft.", "vxb",
+        tools.add(functionTool("compile_vxb", "Compile and validate the complete build requested by the user. "
+                        + "Never call this with a test, prototype, palette check, or fragment; every call replaces the active draft.", "vxb",
                 "Complete VXB-2 source text"));
         tools.add(functionTool("apply_vxb_patch", "Apply numbered-line edits to the current draft and recompile it. "
                         + VxbPatcher.FORMAT_HELP, "patch",
                 "VXP-1 edits; keep every command and its replacement text on the same line"));
         tools.add(functionTool("inspect_vxb", "Redraw the accepted draft as VXB-2 slices so you can compare it against what you wrote.", "draft_id",
                 "Draft ID returned by compile_vxb"));
-        tools.add(functionTool("submit_vxb", "Submit an accepted draft as the final Minecraft build plan.", "draft_id",
+        tools.add(functionTool("submit_vxb", "Submit a validated draft as the final Minecraft build plan. "
+                        + "Compiler validity is not enough: submit only when it fully implements the user's original description.", "draft_id",
                 "Draft ID returned by compile_vxb"));
         return tools;
     }
@@ -471,6 +496,43 @@ public class LlmClient {
 
     private static String draftId(String source) {
         return Integer.toUnsignedString(source.hashCode(), 36);
+    }
+
+    /** Rejects an obvious scale mismatch when the user explicitly requested numeric dimensions. */
+    static String requestMismatch(String description, BuildStructure structure) {
+        if (description == null) return null;
+        Matcher matcher = REQUESTED_DIMENSIONS.matcher(description.toLowerCase(Locale.ROOT));
+        if (!matcher.find()) return null;
+        int requestedX = Integer.parseInt(matcher.group(1));
+        int requestedZ = Integer.parseInt(matcher.group(2));
+        Integer requestedY = matcher.group(3) == null ? null : Integer.parseInt(matcher.group(3));
+        if (structure.getSizeX() < requestedX || structure.getSizeZ() < requestedZ
+                || (requestedY != null && structure.getSizeY() < requestedY)) {
+            String requested = requestedX + " by " + requestedZ
+                    + (requestedY == null ? "" : " by " + requestedY);
+            return "The user requested a " + requestedX + " by " + requestedZ
+                    + (requestedY == null ? " footprint" : " by " + requestedY + " build")
+                    + ", but this draft declares horizontal size " + structure.getSizeX() + " by "
+                    + structure.getSizeZ() + " and height " + structure.getSizeY()
+                    + ". Compile the complete requested " + requested + " build before submitting.";
+        }
+        if (structure.getBlocks().isEmpty()) return "The draft contains no blocks.";
+        int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE;
+        int minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
+        for (BuildStructure.BlockEntry block : structure.getBlocks()) {
+            minX = Math.min(minX, block.x());
+            maxX = Math.max(maxX, block.x());
+            minZ = Math.min(minZ, block.z());
+            maxZ = Math.max(maxZ, block.z());
+        }
+        int occupiedX = maxX - minX + 1;
+        int occupiedZ = maxZ - minZ + 1;
+        if (occupiedX * 2 < requestedX || occupiedZ * 2 < requestedZ) {
+            return "The user requested a " + requestedX + " by " + requestedZ
+                    + " footprint, but the blocks span only " + occupiedX + " by " + occupiedZ
+                    + ". A large empty canvas around a small structure does not satisfy the request.";
+        }
+        return null;
     }
 
     private static String jsonError(String message) {

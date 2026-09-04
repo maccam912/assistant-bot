@@ -121,6 +121,10 @@ property the format exists for.
 5. `VxbCompiler` — assembles diagnostics; blockers throw with a report the repair
    loop can act on line by line.
 
+Compilation validates VXB mechanics; it does not accept the build. The LLM tool
+loop returns a plan only after an explicit `submit_vxb` call, and submission
+rejects an obvious mismatch with a numeric footprint in the user's request.
+
 `VxbPreviewRenderer` closes the loop by redrawing a compiled structure as VXB-2
 slices in the author's own palette symbols, so `inspect_vxb` returns something
 directly comparable to the source rather than a separate projection notation.
