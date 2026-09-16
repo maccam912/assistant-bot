@@ -18,7 +18,7 @@ public final class ThinkSnapshot {
 
     /** Must run on the server thread. The returned request contains JSON and strings only. */
     public static ThinkProtocol.Request capture(AssistantBot bot, TypesafeConfig config, ThinkLoop loop,
-                                                ThinkMemory memory, Vec3 anchor, String outcome, long nowMs) {
+                                                ThinkMemory memory, Vec3 anchor, String outcome, long nowMs, ThinkWork work) {
         ServerPlayer owner = bot.getOwnerPlayer();
         ServerPlayer actor = bot.getFakePlayer();
         JsonObject state = new JsonObject();
@@ -34,10 +34,21 @@ public final class ThinkSnapshot {
         JsonObject internal = new JsonObject();
         internal.addProperty("goal", loop.decision().goal().name());
         internal.add("anchor", position(anchor));
+        internal.add("goal_instructions", loop.goalInstructions());
+        internal.add("goal_focus", loop.goalFocus());
         internal.addProperty("last_action", loop.decision().action().name());
         internal.addProperty("last_outcome", outcome);
         internal.addProperty("scan_radius", config.scanRadius());
         state.add("memory", internal);
+        var view = bot.getWorld().clip(new net.minecraft.world.level.ClipContext(owner.getEyePosition(),
+                owner.getEyePosition().add(owner.getLookAngle().scale(config.scanRadius())),
+                net.minecraft.world.level.ClipContext.Block.OUTLINE, net.minecraft.world.level.ClipContext.Fluid.NONE, owner));
+        if (view.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
+            JsonObject focus = position(Vec3.atLowerCornerOf(view.getBlockPos()));
+            focus.addProperty("block", BuiltInRegistries.BLOCK.getKey(bot.getWorld().getBlockState(view.getBlockPos()).getBlock()).toString());
+            focus.addProperty("face", view.getDirection().name());
+            state.add("owner_looking_at", focus);
+        }
 
         // Two local scans, never a giant bounding box across a separated owner and bot.
         var candidates = new LinkedHashMap<UUID, Monster>();
@@ -71,7 +82,11 @@ public final class ThinkSnapshot {
             entities.add(entity);
         }
         state.add("hostiles", entities);
-        return ThinkProtocol.request(state, config.model(), hostiles.stream().map(mob -> mob.getUUID().toString()).toList());
+        boolean needsWork = loop.decision().goal() == ThinkProtocol.Goal.PROJECT
+                || loop.decision().goal() == ThinkProtocol.Goal.COLLECT_WOOD
+                || !state.getAsJsonArray("new_owner_messages").isEmpty();
+        return ThinkProtocol.request(state, config.model(), hostiles.stream().map(mob -> mob.getUUID().toString()).toList(),
+                needsWork ? work.capture(bot, config, state) : java.util.Map.of());
     }
 
     private static boolean recentAttacker(LivingEntity player, Monster mob) {

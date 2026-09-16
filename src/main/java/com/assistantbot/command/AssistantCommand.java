@@ -206,7 +206,7 @@ public class AssistantCommand {
             bot.setTask(task);
             ctx.getSource().sendSuccess(() -> Component.literal(
                     "§a[Assistant] Thinking with TypeSafe every " + task.intervalSeconds()
-                    + "s. Say 'protect me bot!', 'follow me bot', or 'stay here bot'. "
+                    + "s. Ask 'bot, what can you do?', 'bot, protect me', or describe something to build/dig. "
                     + "Owner chat and nearby world state are sent to TypeSafe while active. /assistant stop exits."), false);
             return 1;
         } catch (IllegalArgumentException e) {

@@ -14,7 +14,7 @@ The bot is driven by a tick-based state machine and supports task interrupts
   `onStop()`, `getStatusString()`. Returns `TickResult` (CONTINUE / COMPLETE / FAILED).
 - **Tasks**: IdleTask, FollowTask, MineTask, PlaceTask, DepositTask, CombatTask, PlanTask, BuildTask
 - **ThinkTask** / `com.assistantbot.think` — TypeSafe System One fan-out decisions,
-  bounded owner chat memory, persistent session goals, async requests polled on the server thread.
+  bounded owner chat memory, persistent session goals/instructions, freeform block work, async requests polled on the server thread.
 - **Utilities**: NavigationHelper (movement), LookHelper (yaw/pitch), InventoryHelper
   (equip/deposit), BlockHelper (break/place)
 
@@ -66,8 +66,9 @@ right-click (`UseItemCallback`); clicks are caught in `clicked` and dispatched t
 - **Interrupt-via-boxing** — Combat interrupt saves current task, restores it after.
   No task queue needed.
 - **Think mode owns combat** — ThinkTask bypasses automatic CombatTask interrupts so
-  chat can change goals during combat. Goal/action/target/threat questions run in one
+  chat can change goals during combat. Protect mode also reacts locally to recent owner attacks. Goal/action/work/material/reply/target/threat questions run in one
   TypeSafe request. See [setup and behavior](docs/typesafe-think.md).
+- **Think work is freeform** — Terrain/inventory snapshots supply bounded place/dig/pickup/move/craft choices. No build template or OpenRouter planner. Resource gathering retains the project; completion/release clears it.
 - **Server-side only** — All logic runs on the logical server. Works in singleplayer
   (which has an embedded server) and dedicated servers.
 - **ServerPlayer-style actor** — `BotPlayer` extends Minecraft's `ServerPlayer`

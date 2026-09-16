@@ -9,7 +9,7 @@ class ThinkProtocolTest {
     @Test void oneFanOutIncludesEveryGoalAndEveryCandidateThreat() {
         var request = ThinkProtocol.request(new JsonObject(), "jev-latest", List.of("a", "b", "c"));
         var questions = request.body().getAsJsonObject("questions");
-        assertEquals(10, questions.size());
+        assertEquals(16, questions.size());
         for (var goal : ThinkProtocol.Goal.values()) assertTrue(questions.has("action_" + goal));
         assertTrue(questions.has("threat_c"));
         assertEquals(4, questions.getAsJsonObject("target").getAsJsonObject("criteria").size());

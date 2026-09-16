@@ -1,6 +1,9 @@
 package com.assistantbot.think;
 
 import java.util.Locale;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.Function;
@@ -19,6 +22,12 @@ public final class ThinkLoop {
     private long pendingRevision;
     private long consumedRevision;
     private long goalVersion;
+    private long decisionVersion;
+    private String reply = "NONE";
+    private JsonArray goalInstructions = new JsonArray();
+    private JsonArray pendingInstructions = new JsonArray();
+    private JsonElement goalFocus = JsonNull.INSTANCE;
+    private JsonElement pendingFocus = JsonNull.INSTANCE;
     private boolean pendingHasInstructions;
     private long decisionAtMs = Long.MIN_VALUE;
     private long latencyMs;
@@ -48,15 +57,34 @@ public final class ThinkLoop {
                     hold();
                     status = "discarded stale decision";
                 } else {
-                    // Goals only change in response to unconsumed owner input, never from world state alone.
+                    // New goals require owner input; existing work goals may complete or be released.
                     if (!pendingHasInstructions) {
                         evaluation = new ThinkProtocol.Evaluation(new ThinkProtocol.Choice("KEEP", 1),
-                                evaluation.actions(), evaluation.target(), evaluation.threats());
+                                evaluation.actions(), evaluation.target(), evaluation.threats(),
+                                new ThinkProtocol.Choice("NONE", 1), evaluation.wood(), evaluation.project());
                     } else if (!evaluation.goal().value().equals("KEEP")
                             && evaluation.goal().confidence() >= config.confidence()) {
                         goalVersion++;
+                        if (!evaluation.goal().value().equals(decision.goal().name())) goalInstructions = new JsonArray();
+                        for (var message : pendingInstructions) {
+                            var saved = message.deepCopy().getAsJsonObject();
+                            saved.add("focus_when_requested", pendingFocus.deepCopy());
+                            goalInstructions.add(saved);
+                        }
+                        // Keep the original request and seven latest refinements even after chat expires.
+                        while (goalInstructions.size() > 8) goalInstructions.remove(1);
+                        goalFocus = pendingFocus.deepCopy();
                     }
+                    if (pendingHasInstructions && evaluation.reply().confidence() >= config.confidence()) reply = evaluation.reply().value();
                     decision = ThinkProtocol.decide(decision.goal(), evaluation, config);
+                    decisionVersion++;
+                    if (decision.action() == ThinkProtocol.Action.COMPLETE || decision.action() == ThinkProtocol.Action.RELEASE_GOAL) {
+                        reply = decision.action() == ThinkProtocol.Action.COMPLETE ? "COMPLETE" : "RELEASED";
+                        decision = new ThinkProtocol.Decision(ThinkProtocol.Goal.HOLD, ThinkProtocol.Action.WAIT, "NONE", decision.confidence());
+                        goalInstructions = new JsonArray();
+                        goalFocus = JsonNull.INSTANCE;
+                        goalVersion++;
+                    }
                     consumedRevision = pendingRevision;
                     decisionAtMs = nowMs;
                     latencyMs = nowMs - sentAtMs;
@@ -73,6 +101,9 @@ public final class ThinkLoop {
             try {
                 ThinkProtocol.Request request = snapshot.get();
                 var messages = request.body().getAsJsonObject("state").getAsJsonArray("new_owner_messages");
+                pendingInstructions = messages == null ? new JsonArray() : messages.deepCopy();
+                var focus = request.body().getAsJsonObject("state").get("owner_looking_at");
+                pendingFocus = focus == null ? JsonNull.INSTANCE : focus.deepCopy();
                 pendingHasInstructions = chatRevision > consumedRevision && messages != null && !messages.isEmpty();
                 sentAtMs = nowMs;
                 pendingRevision = chatRevision;
@@ -106,6 +137,7 @@ public final class ThinkLoop {
     public void suspend() {
         if (pending != null) pending.cancel(true);
         pending = null;
+        decisionAtMs = Long.MIN_VALUE;
         hold();
     }
 
@@ -115,8 +147,16 @@ public final class ThinkLoop {
         intervalMs = value;
         if (failures == 0) nextRequestMs = Long.MIN_VALUE;
     }
+    public JsonArray goalInstructions() { return goalInstructions.deepCopy(); }
+    public JsonElement goalFocus() { return goalFocus.deepCopy(); }
+    public boolean canReact(long nowMs) {
+        return !stopped && !paused && failures == 0 && decisionAtMs != Long.MIN_VALUE
+                && nowMs - decisionAtMs <= Math.max(config.maxAgeMs(), intervalMs * 2);
+    }
+    public String takeReply() { String result = reply; reply = "NONE"; return result; }
     public long intervalMs() { return intervalMs; }
     public long consumedRevision() { return consumedRevision; }
+    public long decisionVersion() { return decisionVersion; }
     public long goalVersion() { return goalVersion; }
     public ThinkProtocol.Decision decision() { return decision; }
     public String status() {

@@ -23,6 +23,13 @@ public final class ThinkTask implements BotTask {
     private long previousGoalVersion;
     private String outcome = "starting";
     private long nextAttackTick;
+    private boolean askedForHelp;
+    private final ThinkWork work = new ThinkWork();
+    private static final String HELP = "I can follow, autoprotect, stay here, hunt, avoid fighting, collect wood, "
+            + "and build or dig from your instructions, one block at a time. Try 'bot, build a stone arch', "
+            + "'bot, dig a 3x3 pit here', or 'bot, collect wood'. Look at a block to point out 'that'. "
+            + "I can gather missing materials and turn logs into planks, then resume. Other crafting recipes are not supported. "
+            + "Use /assistant stop to stop.";
 
     public ThinkTask(TypesafeConfig config) {
         this.config = config;
@@ -41,6 +48,7 @@ public final class ThinkTask implements BotTask {
         if (owner == null || !owner.isAlive() || owner.isSpectator() || owner.level() != bot.getWorld()) {
             loop.suspend();
             stopMovement(bot);
+            work.pause();
             outcome = "waiting for a living owner in the same dimension";
             return TickResult.CONTINUE;
         }
@@ -50,20 +58,55 @@ public final class ThinkTask implements BotTask {
             if (loop.decision().goal() == ThinkProtocol.Goal.HOLD && previousGoalVersion != loop.goalVersion()) {
                 anchor = bot.getPos();
             }
-            return ThinkSnapshot.capture(bot, config, loop, memory, anchor, outcome, now);
+            return ThinkSnapshot.capture(bot, config, loop, memory, anchor, outcome, now, work);
         });
         var decision = loop.decision();
         if (loop.goalVersion() != previousGoalVersion) {
             if (decision.goal() == ThinkProtocol.Goal.HOLD) anchor = bot.getPos();
+            work.pause();
+            askedForHelp = false;
             previousGoalVersion = loop.goalVersion();
             stopMovement(bot);
             owner.sendSystemMessage(Component.literal("§b[Assistant] Goal: " + decision.goal().name().toLowerCase(java.util.Locale.ROOT)));
         }
+        String reply = loop.takeReply();
+        if (!reply.equals("NONE")) {
+            String message = switch (reply) {
+                case "COMPLETE" -> "The requested goal looks complete. I've cleared it and will stay here.";
+                case "RELEASED" -> "I couldn't usefully continue that goal under the current conditions, so I've cleared it. It may be incomplete; give me a new instruction to continue.";
+                case "UNSUPPORTED" -> "That is outside my current think-mode skills. " + HELP;
+                default -> HELP;
+            };
+            owner.sendSystemMessage(Component.literal("§b[Assistant] " + message));
+        }
+        // Protect mode reacts locally to actual recent attacks, without waiting for network latency.
+        // New chat still stops combat immediately while its meaning is evaluated.
+        if (decision.goal() == ThinkProtocol.Goal.PROTECT && loop.canReact(now)
+                && decision.action() != ThinkProtocol.Action.RETREAT && memory.revision() == loop.consumedRevision()
+                && owner.getLastHurtByMob() instanceof Monster attacker && attacker.isAlive()
+                && owner.tickCount - owner.getLastHurtByMobTimestamp() <= 100) {
+            decision = new ThinkProtocol.Decision(decision.goal(), ThinkProtocol.Action.ATTACK, attacker.getUUID().toString(), 1);
+        }
+        if (decision.action() != ThinkProtocol.Action.WORK) work.pause();
         switch (decision.action()) {
+            case COMPLETE, RELEASE_GOAL -> stopMovement(bot); // normalized to HOLD by ThinkLoop
+            case ASK_HELP -> {
+                stopMovement(bot);
+                outcome = "need clarification, materials, tools, or a reachable next step; goal retained";
+                if (!askedForHelp) {
+                    owner.sendSystemMessage(Component.literal("§b[Assistant] I can't find a useful next step. "
+                            + "Please clarify the target or supply missing materials/tools. I'm keeping your goal; /assistant stop cancels it."));
+                    askedForHelp = true;
+                }
+            }
             case WAIT -> { stopMovement(bot); outcome = "watching"; }
             case FOLLOW_OWNER -> walk(bot, owner.position(), 3, NavigationHelper.WALK_SPEED);
             case RETURN_TO_ANCHOR -> walk(bot, anchor, 2, NavigationHelper.WALK_SPEED);
             case ATTACK, RETREAT -> reactToTarget(bot, owner, decision);
+            case WORK -> {
+                NavigationHelper.stopMoving(bot);
+                outcome = work.tick(bot, config, decision.work(), loop.decisionVersion());
+            }
         }
         return TickResult.CONTINUE;
     }

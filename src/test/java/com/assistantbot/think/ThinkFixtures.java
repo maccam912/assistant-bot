@@ -28,7 +28,7 @@ final class ThinkFixtures {
             } else {
                 String selected = entry.getKey().equals("goal") ? goal : entry.getKey().equals("target") ? target : action;
                 var options = question.getAsJsonObject("criteria");
-                if (!options.has(selected)) selected = "WAIT";
+                if (!options.has(selected)) selected = options.has("WAIT") ? "WAIT" : "NONE";
                 answer.addProperty("choice", selected);
                 answer.addProperty("confidence", 0.9);
                 JsonObject probabilities = new JsonObject();
@@ -40,6 +40,14 @@ final class ThinkFixtures {
         JsonObject result = new JsonObject();
         result.add("answers", answers);
         return result;
+    }
+
+    static void choose(JsonObject response, String question, String value, double confidence) {
+        JsonObject answer = response.getAsJsonObject("answers").getAsJsonObject(question);
+        answer.addProperty("choice", value);
+        answer.addProperty("confidence", confidence);
+        JsonObject probabilities = answer.getAsJsonObject("probabilities");
+        for (String option : probabilities.keySet()) probabilities.addProperty(option, option.equals(value) ? 1.0 : 0.0);
     }
 
     static ThinkProtocol.Evaluation protect() {
