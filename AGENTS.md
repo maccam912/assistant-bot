@@ -13,6 +13,8 @@ The bot is driven by a tick-based state machine and supports task interrupts
 - **BotTask** interface — Each task is a mini state machine with `tick()`, `onStart()`,
   `onStop()`, `getStatusString()`. Returns `TickResult` (CONTINUE / COMPLETE / FAILED).
 - **Tasks**: IdleTask, FollowTask, MineTask, PlaceTask, DepositTask, CombatTask, PlanTask, BuildTask
+- **ThinkTask** / `com.assistantbot.think` — TypeSafe System One fan-out decisions,
+  bounded owner chat memory, persistent session goals, async requests polled on the server thread.
 - **Utilities**: NavigationHelper (movement), LookHelper (yaw/pitch), InventoryHelper
   (equip/deposit), BlockHelper (break/place)
 
@@ -32,6 +34,9 @@ Output jar: `build/libs/assistant-bot-<version>.jar`
 | `/assistant dismiss` | Remove your bot |
 | `/assistant follow` / `come` | Bot follows you |
 | `/assistant stop` | Bot goes idle |
+| `/assistant think` | Start TypeSafe reactive mode (default: follow; owner chat changes goals) |
+| `/assistant think interval [seconds]` | Show/set active decision interval, 0.25–60 seconds |
+| `/assistant think goal <instruction>` | Send an instruction to the active thinking bot without public chat |
 | `/assistant mine <x> <y> <z>` | Mine block at position |
 | `/assistant place <block> <x> <y> <z>` | Place a block |
 | `/assistant deposit` | Deposit inventory into nearest container |
@@ -60,6 +65,9 @@ right-click (`UseItemCallback`); clicks are caught in `clicked` and dispatched t
   easy to pause/resume by swapping the task reference.
 - **Interrupt-via-boxing** — Combat interrupt saves current task, restores it after.
   No task queue needed.
+- **Think mode owns combat** — ThinkTask bypasses automatic CombatTask interrupts so
+  chat can change goals during combat. Goal/action/target/threat questions run in one
+  TypeSafe request. See [setup and behavior](docs/typesafe-think.md).
 - **Server-side only** — All logic runs on the logical server. Works in singleplayer
   (which has an embedded server) and dedicated servers.
 - **ServerPlayer-style actor** — `BotPlayer` extends Minecraft's `ServerPlayer`

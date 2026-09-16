@@ -11,6 +11,7 @@ import com.assistantbot.llm.BuildPlanRegistry;
 import com.assistantbot.llm.BuildStructure;
 import com.assistantbot.llm.VxbCompiler;
 import com.assistantbot.task.*;
+import com.assistantbot.think.TypesafeConfig;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -92,6 +93,15 @@ public class AssistantCommand {
                     .executes(AssistantCommand::follow))
                 .then(Commands.literal("stop")
                     .executes(AssistantCommand::stop))
+                .then(Commands.literal("think")
+                    .executes(AssistantCommand::think)
+                    .then(Commands.literal("interval")
+                        .executes(AssistantCommand::showThinkInterval)
+                        .then(Commands.argument("seconds", DoubleArgumentType.doubleArg(0.25, 60))
+                            .executes(AssistantCommand::setThinkInterval)))
+                    .then(Commands.literal("goal")
+                        .then(Commands.argument("instruction", StringArgumentType.greedyString())
+                            .executes(AssistantCommand::thinkGoal))))
                 .then(Commands.literal("undo")
                     .executes(AssistantCommand::undo))
                 .then(Commands.literal("mine")
@@ -185,6 +195,54 @@ public class AssistantCommand {
         if (player == null) return 0;
 
         BotActions.stop(player);
+        return 1;
+    }
+
+    private static int think(CommandContext<CommandSourceStack> ctx) {
+        AssistantBot bot = requireBot(ctx);
+        if (bot == null) return 0;
+        try {
+            var task = new ThinkTask(TypesafeConfig.load());
+            bot.setTask(task);
+            ctx.getSource().sendSuccess(() -> Component.literal(
+                    "§a[Assistant] Thinking with TypeSafe every " + task.intervalSeconds()
+                    + "s. Say 'protect me bot!', 'follow me bot', or 'stay here bot'. "
+                    + "Owner chat and nearby world state are sent to TypeSafe while active. /assistant stop exits."), false);
+            return 1;
+        } catch (IllegalArgumentException e) {
+            ctx.getSource().sendFailure(Component.literal("[Assistant] " + e.getMessage()));
+            return 0;
+        }
+    }
+
+    private static ThinkTask requireThinking(CommandContext<CommandSourceStack> ctx) {
+        AssistantBot bot = requireBot(ctx);
+        if (bot == null) return null;
+        if (bot.getCurrentTask() instanceof ThinkTask task) return task;
+        ctx.getSource().sendFailure(Component.literal("[Assistant] Start /assistant think first."));
+        return null;
+    }
+
+    private static int showThinkInterval(CommandContext<CommandSourceStack> ctx) {
+        var task = requireThinking(ctx);
+        if (task == null) return 0;
+        ctx.getSource().sendSuccess(() -> Component.literal("§b[Assistant] Think interval: "
+                + task.intervalSeconds() + "s. Change with /assistant think interval <seconds>."), false);
+        return 1;
+    }
+
+    private static int setThinkInterval(CommandContext<CommandSourceStack> ctx) {
+        var task = requireThinking(ctx);
+        if (task == null) return 0;
+        task.setIntervalSeconds(DoubleArgumentType.getDouble(ctx, "seconds"));
+        return showThinkInterval(ctx);
+    }
+
+    private static int thinkGoal(CommandContext<CommandSourceStack> ctx) {
+        var task = requireThinking(ctx);
+        if (task == null) return 0;
+        task.hearOwner("Bot, " + StringArgumentType.getString(ctx, "instruction"));
+        ctx.getSource().sendSuccess(() -> Component.literal("§a[Assistant] Instruction queued for the next decision."), false);
         return 1;
     }
 

@@ -3,11 +3,13 @@ package com.assistantbot;
 import com.assistantbot.command.AssistantCommand;
 import com.assistantbot.gui.BotMenu;
 import com.assistantbot.gui.BotRemoteItem;
+import com.assistantbot.task.ThinkTask;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import org.slf4j.Logger;
@@ -27,6 +29,13 @@ public class AssistantMod implements ModInitializer {
 
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             AssistantManager.getInstance().tick(server);
+        });
+
+        ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) -> {
+            var bot = AssistantManager.getInstance().getBot(sender.getUUID());
+            if (bot != null && bot.getCurrentTask() instanceof ThinkTask think) {
+                think.hearOwner(message.signedContent());
+            }
         });
 
         // Right-clicking the Bot Remote opens the menu (server-side only).

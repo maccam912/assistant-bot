@@ -10,6 +10,7 @@ import com.assistantbot.task.CombatTask;
 import com.assistantbot.task.IdleTask;
 import com.assistantbot.task.PlanTask;
 import com.assistantbot.task.TickResult;
+import com.assistantbot.task.ThinkTask;
 import com.assistantbot.task.UndoBuildTask;
 import com.mojang.authlib.GameProfile;
 import java.util.UUID;
@@ -97,7 +98,8 @@ public class AssistantBot {
     }
 
     private void checkCombatInterrupt() {
-        if (currentTask instanceof CombatTask) return;
+        // ThinkTask owns its combat decisions and must remain responsive to chat while fighting.
+        if (currentTask instanceof CombatTask || currentTask instanceof ThinkTask) return;
 
         // Check 1: bot itself took damage
         float currentHealth = botPlayer.getHealth();
@@ -238,6 +240,8 @@ public class AssistantBot {
         if (currentTask != null) {
             currentTask.onStop(this);
         }
+        if (savedTask != null && savedTask != currentTask) savedTask.onStop(this);
+        savedTask = null;
         this.currentTask = task;
         task.onStart(this);
     }
@@ -246,6 +250,8 @@ public class AssistantBot {
         if (currentTask != null) {
             currentTask.onStop(this);
         }
+        if (savedTask != null && savedTask != currentTask) savedTask.onStop(this);
+        savedTask = null;
         if (pathfinder != null) {
             pathfinder.destroy();
             pathfinder = null;
