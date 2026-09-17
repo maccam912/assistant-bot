@@ -50,6 +50,13 @@ final class ThinkFixtures {
         for (String option : probabilities.keySet()) probabilities.addProperty(option, option.equals(value) ? 1.0 : 0.0);
     }
 
+    static void chooseWork(JsonObject response, ThinkProtocol.Request request, String branch, String id, double confidence) {
+        if (id.equals("NONE")) { choose(response, "work_" + branch, "NONE", confidence); return; }
+        String kind = request.work().get(id).kind();
+        choose(response, "work_" + branch, kind, confidence);
+        choose(response, "candidate_" + kind, id, confidence);
+    }
+
     static ThinkProtocol.Evaluation protect() {
         var request = request();
         return ThinkProtocol.parse(response(request, "PROTECT", "ATTACK", "zombie"), request);

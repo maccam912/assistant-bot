@@ -27,6 +27,8 @@ public final class ThinkLoop {
     private JsonArray goalInstructions = new JsonArray();
     private JsonArray pendingInstructions = new JsonArray();
     private JsonElement goalFocus = JsonNull.INSTANCE;
+    private JsonElement goalOrigin = JsonNull.INSTANCE;
+    private JsonElement pendingOrigin = JsonNull.INSTANCE;
     private JsonElement pendingFocus = JsonNull.INSTANCE;
     private boolean pendingHasInstructions;
     private long decisionAtMs = Long.MIN_VALUE;
@@ -66,6 +68,7 @@ public final class ThinkLoop {
                             && evaluation.goal().confidence() >= config.confidence()) {
                         goalVersion++;
                         if (!evaluation.goal().value().equals(decision.goal().name())) goalInstructions = new JsonArray();
+                        if (goalInstructions.isEmpty()) goalOrigin = pendingOrigin.deepCopy();
                         for (var message : pendingInstructions) {
                             var saved = message.deepCopy().getAsJsonObject();
                             saved.add("focus_when_requested", pendingFocus.deepCopy());
@@ -83,6 +86,7 @@ public final class ThinkLoop {
                         decision = new ThinkProtocol.Decision(ThinkProtocol.Goal.HOLD, ThinkProtocol.Action.WAIT, "NONE", decision.confidence());
                         goalInstructions = new JsonArray();
                         goalFocus = JsonNull.INSTANCE;
+                        goalOrigin = JsonNull.INSTANCE;
                         goalVersion++;
                     }
                     consumedRevision = pendingRevision;
@@ -104,6 +108,8 @@ public final class ThinkLoop {
                 pendingInstructions = messages == null ? new JsonArray() : messages.deepCopy();
                 var focus = request.body().getAsJsonObject("state").get("owner_looking_at");
                 pendingFocus = focus == null ? JsonNull.INSTANCE : focus.deepCopy();
+                var actor = request.body().getAsJsonObject("state").getAsJsonObject("bot");
+                pendingOrigin = actor == null || !actor.has("position") ? JsonNull.INSTANCE : actor.get("position").deepCopy();
                 pendingHasInstructions = chatRevision > consumedRevision && messages != null && !messages.isEmpty();
                 sentAtMs = nowMs;
                 pendingRevision = chatRevision;
@@ -149,6 +155,7 @@ public final class ThinkLoop {
     }
     public JsonArray goalInstructions() { return goalInstructions.deepCopy(); }
     public JsonElement goalFocus() { return goalFocus.deepCopy(); }
+    public JsonElement goalOrigin() { return goalOrigin.deepCopy(); }
     public boolean canReact(long nowMs) {
         return !stopped && !paused && failures == 0 && decisionAtMs != Long.MIN_VALUE
                 && nowMs - decisionAtMs <= Math.max(config.maxAgeMs(), intervalMs * 2);

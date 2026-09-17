@@ -31,7 +31,7 @@ Then try ordinary chat:
 - `hunt nearby monsters bot` — clear nearby hostiles.
 - `avoid fighting bot` — retreat from threats and follow when clear.
 - `bot, what can you do?` — get a private chat explanation of available abilities.
-- `bot, go collect wood` — find nearby logs and collect their drops.
+- `bot, go collect wood` — find nearby logs and collect their drops (defaults to 16 carried logs; specify a count to override).
 - `bot, build a wooden arch over that path` — make a freeform project from your description.
 - `bot, dig a 3x3 pit two blocks deep here` — choose excavation steps from local terrain.
 - `bot, make it taller` — retain the original project and add a refinement.
@@ -71,13 +71,19 @@ Each request contains a server-thread snapshot of:
   chat is excluded.
 - Nearby hostile monsters: stable entity UUID, type, position, health, distance to
   bot/owner, line of sight, who they target, recent attacks, and creeper swelling.
-- Persistent goal, hold anchor, previous action, and its local execution outcome.
+- Persistent goal, hold anchor, original goal position, previous action, and its local execution outcome.
 - Up to eight accepted instruction messages (original plus recent refinements),
   with the block focus captured for each. These persist past the two-minute chat window.
-- For work goals or new chat: inventory, placeable materials, a moving 9×8×9
-  terrain window around the bot, up to 32 recent work outcomes, and temporary failures.
+- For work goals or new chat: the bot's own inventory, aggregated item counts,
+  collected log count, free-slot availability, placeable materials, active work and
+  mining progress. Owner inventory is separate and cannot supply bot actions.
+- A moving 9×8×9 terrain window, up to 32 recent work outcomes, temporary failures,
+  and up to 256 session edit positions with expected and currently observed blocks.
+  These retain construction context while gathering and after short-term history expires.
 - Bounded candidates: up to 64 placements, 64 digs, 16 tree logs, 16 movement
   destinations and 16 nearby dropped items, plus available log-to-plank conversions.
+  A separate bounded tree search extends up to 12 blocks horizontally and six above
+  the bot, still inside the owner/bot leash. It excludes remembered edit positions.
   All block coordinates are world coordinates; omitted terrain is unknown.
 
 Chat is consumed once for goal updates. Old messages can remain as conversational
@@ -89,15 +95,21 @@ only in the authorization header and are not included in state or status output.
 
 Every call contains a goal classification and seven **speculative action choices**,
 one for each possible goal, plus independent reply, wood-work, project-work and
-material choices. Nearby monsters add a target choice and one **Noul** threat
-judgment per monster. The default target cap gives at most 25 questions in one
-request. Position and material are separate choices, avoiding a large combination
-of every block with every location. All questions use the same snapshot.
+material choices. Work decisions first choose a primitive kind (pickup, craft,
+place, chop, dig or move); speculative target questions select a candidate within
+each offered kind. Code combines only the chosen kind's target and confidence.
+Equivalent targets have an explicit distance/coordinate tie-break rank, and
+placement is not offered with empty inventory. Nearby monsters add a target choice
+and one **Noul** threat judgment per monster. With seven work kinds and the default
+target cap, there are at most 32 questions in one request. All questions use the
+same snapshot; no question reads another question's answer.
 
 The controller selects the action branch for the accepted goal, including a goal
 newly accepted in that same response. The questions do not depend on one another's
 answers. Choice confidence gates goal changes, actions, and target selection.
 Model-selected protect attacks also need sufficient Noul threat probability.
+Work-kind, target and material confidence gate only WORK; irrelevant target uncertainty
+does not suppress a confident help request or completion decision.
 Protect mode can react on the next task tick to a monster that hurt its owner in
 the last five seconds, without waiting for another request. That reaction still
 obeys target validation, pending-chat cancellation, API failure/lease checks and
@@ -135,6 +147,11 @@ block into four matching planks. Gathering does not replace the project: TypeSaf
 can collect/craft missing material, then return to construction in the next decisions.
 Other crafting recipes, remote exploration, furnaces and container access are not
 implemented in think mode. Supply tools and materials that it cannot obtain locally.
+Ordinary requests such as a little survival hut permit modest dimensions and local
+materials without asking for every detail. Questions explicitly prefer picking up
+drops, crafting carried logs, and gathering missing supplies over giving up. The
+original goal position and remembered edits keep the construction site grounded.
+These are contextual hints, not a persistent architectural blueprint.
 
 The executor rechecks loaded terrain, reach, line of sight, world border, interaction
 permission, inventory and the current block before edits. It doesn't replace occupied
@@ -183,7 +200,20 @@ it never asks a slower model to reason about the situation.
 `./gradlew build` runs protocol, decision gating, chat retention, scheduling,
 stale-result, cancellation, retry, configuration, freeform selection, resource-recovery,
 instruction-retention, goal-completion and local HTTP contract tests.
-These tests use synthetic responses, not the live TypeSafe service.
+The normal build uses synthetic responses and skips live API tests.
+
+For an opt-in live decision check with `TYPESAFE_API_KEY` in the environment or the
+repository root `.env`:
+
+```text
+TYPESAFE_LIVE_TEST=1 TYPESAFE_LIVE_REPEATS=3 ./gradlew test --tests '*TypesafeLiveTest' --rerun-tasks
+```
+
+This tests collection, empty-inventory hut recovery, log conversion, placement,
+pickup, project resumption, excavation, completion and unavailable work. Requests
+and compact decision reports are saved under ignored `build/typesafe-live/`;
+credentials are not included. The default repeat count is one, capped at ten.
+These are live API decisions against synthetic world snapshots, not gameplay tests.
 
 For an in-game smoke test, start think mode with a configured key, ask it to
 protect you near a zombie, then ask it to hold position. Confirm goal acknowledgments
@@ -200,7 +230,7 @@ Also try losing sight of the target and changing dimension. For freeform work:
 6. Verify completion clears the goal and results in holding position rather than more edits.
 
 Live model quality, placement orientation, survival resource use and navigation
-behavior require gameplay validation. Tests don't contact the live TypeSafe service.
+behavior require gameplay validation. Only the explicitly enabled live test contacts TypeSafe.
 
 API design references: [TypeSafe API](https://docs.typesafe.ai/api),
 [speculative fan-out](https://docs.typesafe.ai/patterns/fan-out),

@@ -34,7 +34,7 @@ class ThinkProjectTest {
 
     private ThinkProtocol.Evaluation evaluation(ThinkProtocol.Request request, String goal, String action, String work) {
         JsonObject response = ThinkFixtures.response(request, goal, action, "NONE");
-        ThinkFixtures.choose(response, "work_project", work, 0.9);
+        ThinkFixtures.chooseWork(response, request, "project", work, 0.9);
         ThinkFixtures.choose(response, "material", "minecraft:oak_planks", 0.9);
         return ThinkProtocol.parse(response, request);
     }
@@ -55,15 +55,15 @@ class ThinkProjectTest {
     @Test void lowConfidenceMaterialStopsPlacementButDoesNotStopGathering() {
         var request = project("Build an arch");
         var response = ThinkFixtures.response(request, "PROJECT", "WORK", "NONE");
-        ThinkFixtures.choose(response, "work_project", "position", .9);
+        ThinkFixtures.chooseWork(response, request, "project", "position", .9);
         ThinkFixtures.choose(response, "material", "minecraft:oak_planks", .1);
         assertEquals(ThinkProtocol.Action.WAIT, ThinkProtocol.decide(ThinkProtocol.Goal.FOLLOW,
                 ThinkProtocol.parse(response, request), ThinkFixtures.config()).action());
-        ThinkFixtures.choose(response, "work_project", "resource", .9);
+        ThinkFixtures.chooseWork(response, request, "project", "resource", .9);
         var decision = ThinkProtocol.decide(ThinkProtocol.Goal.PROJECT, ThinkProtocol.parse(response, request), ThinkFixtures.config());
         assertEquals(ThinkProtocol.Action.WORK, decision.action());
         assertEquals("dig", decision.work().kind());
-        ThinkFixtures.choose(response, "work_project", "craft", .9);
+        ThinkFixtures.chooseWork(response, request, "project", "craft", .9);
         assertEquals("craft", ThinkProtocol.decide(ThinkProtocol.Goal.PROJECT,
                 ThinkProtocol.parse(response, request), ThinkFixtures.config()).work().kind());
     }
@@ -71,10 +71,64 @@ class ThinkProjectTest {
     @Test void woodCollectionCannotChooseArbitraryExcavationOrPlacement() {
         var options = project("Collect wood").body().getAsJsonObject("questions")
                 .getAsJsonObject("work_wood").getAsJsonObject("criteria");
-        assertTrue(options.has("tree"));
-        assertFalse(options.has("resource"));
-        assertFalse(options.has("position"));
+        assertTrue(options.has("chop"));
+        assertFalse(options.has("dig"));
+        assertFalse(options.has("place"));
         assertFalse(options.has("craft"));
+    }
+
+    @Test void candidateConfidenceOnlyGatesWorkAndCannotCrossPrimitiveKinds() {
+        var request = project("Build an arch");
+        for (String action : List.of("ASK_HELP", "COMPLETE", "RELEASE_GOAL")) {
+            var response = ThinkFixtures.response(request, "PROJECT", action, "NONE");
+            ThinkFixtures.chooseWork(response, request, "project", "position", .01);
+            ThinkFixtures.choose(response, "material", "minecraft:oak_planks", .01);
+            assertEquals(ThinkProtocol.Action.valueOf(action), ThinkProtocol.decide(ThinkProtocol.Goal.PROJECT,
+                    ThinkProtocol.parse(response, request), ThinkFixtures.config()).action());
+        }
+        var response = ThinkFixtures.response(request, "PROJECT", "WORK", "NONE");
+        ThinkFixtures.chooseWork(response, request, "project", "position", .01);
+        assertEquals(ThinkProtocol.Action.WAIT, ThinkProtocol.decide(ThinkProtocol.Goal.PROJECT,
+                ThinkProtocol.parse(response, request), ThinkFixtures.config()).action());
+        ThinkFixtures.choose(response, "candidate_place", "resource", 1);
+        assertThrows(IllegalArgumentException.class, () -> ThinkProtocol.parse(response, request));
+    }
+
+    @Test void emptyInventoryOffersResourceRecoveryButNoPlacementAndTargetsAreRanked() {
+        var empty = TypesafeLiveTest.scenario("hut_empty", "jev-latest");
+        var questions = empty.body().getAsJsonObject("questions");
+        assertFalse(questions.has("candidate_place"));
+        assertFalse(questions.getAsJsonObject("work_project").getAsJsonObject("criteria").has("place"));
+        assertTrue(questions.getAsJsonObject("work_project").getAsJsonObject("criteria").has("chop"));
+        var stocked = TypesafeLiveTest.scenario("hut_planks", "jev-latest");
+        assertTrue(stocked.body().getAsJsonObject("questions").getAsJsonObject("candidate_place")
+                .getAsJsonObject("criteria").get("place_1_1").getAsString().startsWith("Tie-break rank 1:"));
+    }
+
+    @Test void buildOriginSurvivesMovementAndRefinementsAndClearsOnCompletion() {
+        ArrayList<CompletableFuture<ThinkProtocol.Evaluation>> futures = new ArrayList<>();
+        var loop = new ThinkLoop(ThinkFixtures.config(), ignored -> {
+            var future = new CompletableFuture<ThinkProtocol.Evaluation>(); futures.add(future); return future;
+        });
+        var request = project("Build an arch");
+        var state = request.body().getAsJsonObject("state");
+        var actor = new JsonObject();
+        var origin = new JsonObject();
+        origin.addProperty("x", 2); origin.addProperty("y", 64); origin.addProperty("z", 3);
+        actor.add("position", origin); state.add("bot", actor);
+        loop.tick(0, 1, () -> request);
+        futures.getLast().complete(evaluation(request, "PROJECT", "WORK", "position"));
+        loop.tick(250, 1, () -> request);
+        assertEquals(2, loop.goalOrigin().getAsJsonObject().get("x").getAsInt());
+        origin.addProperty("x", 10);
+        loop.tick(1000, 2, () -> request);
+        futures.getLast().complete(evaluation(request, "PROJECT", "WORK", "resource"));
+        loop.tick(1250, 2, () -> request);
+        assertEquals(2, loop.goalOrigin().getAsJsonObject().get("x").getAsInt());
+        loop.tick(2000, 2, () -> project(null));
+        futures.getLast().complete(evaluation(request, "KEEP", "COMPLETE", "NONE"));
+        loop.tick(2250, 2, () -> project(null));
+        assertTrue(loop.goalOrigin().isJsonNull());
     }
 
     @Test void gatheringAndRefinementsKeepOriginalGoalPastChatExpiryAndCompletionClearsIt() {

@@ -36,6 +36,7 @@ public final class ThinkSnapshot {
         internal.add("anchor", position(anchor));
         internal.add("goal_instructions", loop.goalInstructions());
         internal.add("goal_focus", loop.goalFocus());
+        internal.add("goal_origin", loop.goalOrigin());
         internal.addProperty("last_action", loop.decision().action().name());
         internal.addProperty("last_outcome", outcome);
         internal.addProperty("scan_radius", config.scanRadius());

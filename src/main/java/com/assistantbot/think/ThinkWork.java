@@ -34,6 +34,7 @@ public final class ThinkWork {
     private String completedOutcome = "";
     private final Map<ThinkProtocol.Work, Long> blockedUntil = new HashMap<>();
     private final Deque<String> recentWork = new ArrayDeque<>();
+    private final LinkedHashMap<BlockPos, String> edits = new LinkedHashMap<>();
 
     public void pause() { mining = null; breakingTicks = 0; lastWork = null; }
 
@@ -43,6 +44,8 @@ public final class ThinkWork {
         Map<String, ThinkProtocol.Work> candidates = new LinkedHashMap<>();
         JsonArray inventory = new JsonArray();
         JsonObject materials = new JsonObject();
+        JsonObject totals = new JsonObject();
+        int logCount = 0;
         var inv = bot.getFakePlayer().getInventory();
         for (int i = 0; i < inv.getContainerSize(); i++) {
             var stack = inv.getItem(i);
@@ -52,6 +55,8 @@ public final class ThinkWork {
             entry.addProperty("item", id);
             entry.addProperty("count", stack.getCount());
             inventory.add(entry);
+            totals.addProperty(id, stack.getCount() + (totals.has(id) ? totals.get(id).getAsInt() : 0));
+            if (stack.is(ItemTags.LOGS)) logCount += stack.getCount();
             if (stack.getItem() instanceof BlockItem) {
                 materials.addProperty(id, stack.getCount() + (materials.has(id) ? materials.get(id).getAsInt() : 0));
             }
@@ -60,6 +65,25 @@ public final class ThinkWork {
         }
         state.add("inventory", inventory);
         state.add("placeable_materials", materials);
+        state.add("inventory_totals", totals);
+        state.addProperty("inventory_owner", "bot (separate from owner inventory); items must be picked up before use");
+        state.addProperty("collected_logs", logCount);
+        state.addProperty("inventory_has_free_slot", inv.getFreeSlot() >= 0);
+        state.addProperty("active_work", lastWork == null ? "none" : lastWork.toString());
+        state.addProperty("mining_progress_ticks", breakingTicks);
+        state.addProperty("capabilities", "Survival inventory. Can chop logs by hand, pick up drops, convert logs to planks, "
+                + "place inventory blocks, dig with suitable tools, and walk. Cannot craft tools, doors, beds or torches. "
+                + "A basic shelter can use solid blocks and an open entrance. Work candidates may require walking first.");
+        JsonArray projectEdits = new JsonArray();
+        edits.forEach((pos, expected) -> {
+            JsonObject edit = new JsonObject();
+            edit.addProperty("x", pos.getX()); edit.addProperty("y", pos.getY()); edit.addProperty("z", pos.getZ());
+            edit.addProperty("expected_block", expected);
+            edit.addProperty("current_block", bot.getWorld().hasChunkAt(pos)
+                    ? BuiltInRegistries.BLOCK.getKey(bot.getWorld().getBlockState(pos).getBlock()).toString() : "unknown/unloaded");
+            projectEdits.add(edit);
+        });
+        state.add("project_edits", projectEdits);
         JsonArray history = new JsonArray();
         recentWork.forEach(history::add);
         state.add("recent_work", history);
@@ -82,19 +106,36 @@ public final class ThinkWork {
             String id = BuiltInRegistries.BLOCK.getKey(block.getBlock()).toString();
             cell.add(id);
             terrain.add(cell);
-            if (block.is(BlockTags.LOGS) && logs < 16 && naturalLog(bot, pos)) {
+            if (block.is(BlockTags.LOGS) && logs < 16 && !edits.containsKey(pos) && canDig(bot, config, pos) && naturalLog(bot, pos)) {
                 offer(candidates, at("chop", pos, id)); logs++;
             }
             if (digs < 64 && canDig(bot, config, pos)) {
                 offer(candidates, at("dig", pos, id)); digs++;
             }
-            if (places < 64 && canPlace(bot, config, pos)) {
+            if (places < 64 && !materials.isEmpty() && canPlace(bot, config, pos)) {
                 // Position and material are independent bounded choices, avoiding their Cartesian product.
                 offer(candidates, at("place", pos, "selected material")); places++;
             }
             if (moves < 16 && standable(bot, pos) && pos.distManhattan(center) >= 2) {
                 offer(candidates, at("move", pos, "")); moves++;
             }
+        }
+        // Resource search extends beyond the small construction window. Keep terrain and choices bounded.
+        int radius = Math.min(12, (int) config.scanRadius());
+        List<BlockPos> trees = new ArrayList<>();
+        for (BlockPos pos : BlockPos.betweenClosed(center.offset(-radius, -3, -radius), center.offset(radius, 6, radius))) {
+            if (Math.abs(pos.getX() - center.getX()) <= 4 && Math.abs(pos.getZ() - center.getZ()) <= 4
+                    && pos.getY() <= center.getY() + 4) continue;
+            if (withinLeash(bot, config, pos) && bot.getWorld().hasChunkAt(pos)
+                    && bot.getWorld().getBlockState(pos).is(BlockTags.LOGS) && !edits.containsKey(pos)
+                    && canDig(bot, config, pos) && naturalLog(bot, pos)) trees.add(pos.immutable());
+        }
+        trees.sort(Comparator.comparingDouble((BlockPos p) -> Vec3.atCenterOf(p).distanceToSqr(bot.getPos()))
+                .thenComparingInt(BlockPos::getY).thenComparingInt(BlockPos::getX).thenComparingInt(BlockPos::getZ));
+        for (BlockPos pos : trees) {
+            if (logs >= 16) break;
+            offer(candidates, at("chop", pos, BuiltInRegistries.BLOCK.getKey(bot.getWorld().getBlockState(pos).getBlock()).toString()));
+            logs++;
         }
         for (ItemEntity item : bot.getWorld().getEntitiesOfClass(ItemEntity.class,
                 bot.getFakePlayer().getBoundingBox().inflate(Math.min(8, config.scanRadius())), e -> e.isAlive()).stream()
@@ -108,6 +149,8 @@ public final class ThinkWork {
         JsonObject options = new JsonObject();
         candidates.forEach((id, work) -> {
             String description = work.toString();
+            if (!work.kind().equals("craft")) description += " distance_from_bot="
+                    + Math.round(Vec3.atCenterOf(new BlockPos(work.x(), work.y(), work.z())).distanceTo(bot.getPos()) * 10) / 10.0;
             if (work.kind().startsWith("pickup")) {
                 var entity = bot.getWorld().getEntity(UUID.fromString(work.block()));
                 if (entity instanceof ItemEntity item) description += " item=" + BuiltInRegistries.ITEM.getKey(item.getItem().getItem())
@@ -198,7 +241,7 @@ public final class ThinkWork {
         if (completedDecision == decisionVersion) return completedOutcome;
         if (work == null) { pause(); return "no suitable work"; }
         long tick = bot.getWorld().getGameTime();
-        if (!work.equals(lastWork)) { lastWork = work; startedTick = tick; }
+        if (!work.equals(lastWork)) { mining = null; breakingTicks = 0; lastWork = work; startedTick = tick; }
         if (blockedUntil.getOrDefault(cooldownKey(work), 0L) > tick) return "waiting for a different work candidate";
         if (tick - startedTick > 200) return blocked(work, tick, "work timed out; trying another candidate");
         if (work.kind().equals("craft")) {
@@ -225,7 +268,7 @@ public final class ThinkWork {
         }
         if (work.kind().equals("move")) {
             if (!standable(bot, pos)) return blocked(work, tick, "movement destination changed");
-            if (bot.getPos().distanceTo(Vec3.atBottomCenterOf(pos)) < 1) return "at work destination";
+            if (bot.getPos().distanceTo(Vec3.atBottomCenterOf(pos)) < 1) return record("at work destination " + pos.toShortString());
             Vec3 waypoint = bot.getPathfinder().getNextWaypoint(pos);
             if (waypoint == null) return blocked(work, tick, "no path to selected destination");
             NavigationHelper.moveToward(bot, waypoint, NavigationHelper.WALK_SPEED);
@@ -233,15 +276,16 @@ public final class ThinkWork {
         }
         if (work.kind().startsWith("pickup")) {
             var entity = bot.getWorld().getEntity(UUID.fromString(work.block()));
-            if (!(entity instanceof ItemEntity item) || !item.isAlive()) return "item already picked up";
+            if (!(entity instanceof ItemEntity item) || !item.isAlive()) return record("item no longer available; check inventory");
             if (!withinLeash(bot, config, item.blockPosition())) return "item moved outside work area";
             if (bot.getPos().distanceTo(item.position()) > 1.2) return walk(bot, item.blockPosition());
             if (!bot.getFakePlayer().hasLineOfSight(item)) return blocked(work, tick, "item hidden behind a block");
             NavigationHelper.stopMoving(bot);
             int before = item.getItem().getCount();
+            String itemId = BuiltInRegistries.ITEM.getKey(item.getItem().getItem()).toString();
             item.playerTouch(bot.getFakePlayer());
             if (item.isAlive() && item.getItem().getCount() == before) return blocked(work, tick, "cannot pick up item; inventory full or pickup restricted");
-            return record("picked up " + BuiltInRegistries.ITEM.getKey(item.getItem().getItem()));
+            return record("picked up " + itemId + "; previous drop count=" + before);
         }
         BlockState state = bot.getWorld().getBlockState(pos);
         if ((work.kind().equals("dig") || work.kind().equals("chop"))
@@ -267,6 +311,7 @@ public final class ThinkWork {
             if (breakingTicks < BlockHelper.calculateBreakTicks(bot.getFakePlayer(), state, hardness)) return "digging " + work.block();
             pause();
             boolean removed = bot.getFakePlayer().gameMode.destroyBlock(pos);
+            if (removed && work.kind().equals("dig")) rememberEdit(pos, "minecraft:air");
             return removed ? record("broke " + work.block() + " at " + pos.toShortString()) : blocked(work, tick, "block breaking denied");
         }
         if (work.kind().equals("place")) {
@@ -274,6 +319,7 @@ public final class ThinkWork {
             if (!(material instanceof BlockItem) || !InventoryHelper.equipItem(bot.getFakePlayer(), material)) return "out of selected building material";
             boolean success = BlockHelper.placeBlock(bot, pos);
             if (success && !bot.getWorld().getBlockState(pos).isAir()) {
+                rememberEdit(pos, BuiltInRegistries.BLOCK.getKey(bot.getWorld().getBlockState(pos).getBlock()).toString());
                 return record("placed " + work.block() + " at " + pos.toShortString());
             }
             return blocked(work, tick, "placement failed; trying another candidate");
@@ -290,11 +336,17 @@ public final class ThinkWork {
     }
 
     private String record(String result) {
+        pause();
         completedDecision = executingDecision;
         completedOutcome = result;
         recentWork.addLast(result);
         while (recentWork.size() > 32) recentWork.removeFirst();
         return result;
+    }
+
+    private void rememberEdit(BlockPos pos, String block) {
+        edits.put(pos.immutable(), block);
+        while (edits.size() > 256) edits.remove(edits.keySet().iterator().next());
     }
 
     private String walk(AssistantBot bot, BlockPos pos) {
