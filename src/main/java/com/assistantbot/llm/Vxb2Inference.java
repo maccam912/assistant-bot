@@ -81,6 +81,7 @@ public final class Vxb2Inference {
             stairFacing.put(cell, hint.containsKey("up") ? direction(hint.get("up"), cell, notes) : inferAscent(grid, cell, notes));
             stairHalf.put(cell, half(hint, inferHalf(grid, cell)));
         }
+        extendShortStaircases(grid, base, stairFacing, stairHalf, notes);
         Map<Cell, String> ladderWalls = resolveLadderWalls(grid, cellHints, notes);
 
         List<PlacementGroup> fixtures = new ArrayList<>();
@@ -314,6 +315,62 @@ public final class Vxb2Inference {
             return "north";
         }
         return best;
+    }
+
+    /**
+     * A staircase's top stair belongs in the layer of the floor it serves, and
+     * models regularly stop one step short, leaving the flight a full block below
+     * the floor it runs into. A flight that is entered from a floor and runs
+     * straight at a floor continuing ahead with room above it is extended by
+     * turning the floor block it meets into one more stair. The entry test is what
+     * keeps roofs out: an eave overhangs open air, where a staircase starts from
+     * somewhere a player can stand.
+     */
+    private static void extendShortStaircases(Grid grid, Map<Cell, String> base, Map<Cell, String> facings,
+                                              Map<Cell, String> halves, List<String> notes) {
+        Map<Cell, Cell> landings = new LinkedHashMap<>(); // floor block -> the top stair that runs into it
+        for (Cell top : grid.cells()) {
+            String facing = facings.get(top);
+            if (facing == null || !halves.get(top).equals("bottom")) continue;
+            Cell landing = step(above(top), facing);
+            if (landings.containsKey(landing) || !isPlainFloor(grid, landing)) continue;
+            if (grid.isSolid(above(top)) || grid.isSolid(above(above(top)))) continue;
+            if (grid.get(above(landing)) != null || grid.get(above(above(landing))) != null) continue;
+            Cell beyond = step(landing, facing);
+            if (!grid.isSolid(beyond) || grid.isSolid(above(beyond)) || grid.isSolid(above(above(beyond)))) continue;
+
+            Cell bottom = top;
+            Cell lower = below(step(bottom, opposite(facing)));
+            while (facing.equals(facings.get(lower)) && halves.get(lower).equals("bottom")) {
+                bottom = lower;
+                lower = below(step(bottom, opposite(facing)));
+            }
+            // y=0 sits on the world's ground, so an approach at that level always has footing.
+            Cell approach = step(bottom, opposite(facing));
+            if (grid.isSolid(approach) || grid.isSolid(above(approach))) continue;
+            if (approach.y() > 0 && !grid.isSolid(below(approach))) continue;
+            landings.put(landing, top);
+        }
+        for (Map.Entry<Cell, Cell> entry : landings.entrySet()) {
+            Cell landing = entry.getKey();
+            Cell top = entry.getValue();
+            String facing = facings.get(top);
+            base.put(landing, base.get(top));
+            facings.put(landing, facing);
+            halves.put(landing, "bottom");
+            notes.add("The stairs climbing " + facing + " to " + format(top) + " stopped a full block below the floor at "
+                    + format(landing) + ", so that floor block became one more stair. A staircase's top stair belongs in "
+                    + "the upper floor's own layer.");
+        }
+    }
+
+    /** A plain block a staircase can be cut into: not already a step, a railing, a fixture or a pinned state. */
+    private static boolean isPlainFloor(Grid grid, Cell cell) {
+        String blockId = grid.get(cell);
+        if (!grid.isSolid(cell) || pinned(blockId) || isStairs(blockId)) return false;
+        String path = path(blockId);
+        return !path.endsWith("_slab") && !path.endsWith("_fence") && !path.endsWith("_fence_gate")
+                && !path.endsWith("_wall") && !path.endsWith("_trapdoor") && !FURNITURE.contains(path);
     }
 
     /**

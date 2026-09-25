@@ -155,7 +155,9 @@ Supported hints: `up=`, `axis=`, `half=`/`top`, `facing=`, `outside=`, `hanging=
 - Break up flat walls with a second material — a stone base course, log corner posts, a plank band under the eaves.
 - Use stairs and slabs for roofs, eaves, awnings and steps. A roof of full cubes is the main thing that reads as machine-made.
 - Windows want two or more panes side by side; single panes read as holes.
-- Leave two blocks of headroom, give every enclosed room a door, and connect floors with stairs or a ladder. Draw a ladder against one wall in every cell from the lower floor up to and including its one-block hole in the floor above.
+- Leave two blocks of headroom, give every enclosed room a door, and connect floors with stairs or a ladder.
+- A staircase climbs one level per stair, and its top stair sits in the upper floor's own layer. From a floor drawn at y=0 to one drawn at y=4 that is stairs at y=1, 2, 3 and 4: the y=4 stair replaces a floor block in `plan y=4`, and that floor needs a hole over the stairs beneath it for headroom. Stopping at y=3 leaves a full-block step up at the top.
+- Draw a ladder against one wall in every cell from the lower floor up to and including its one-block hole in the floor above.
 - The terrain snapshot in the user message gives relative surface heights, materials and occupancy around the marker. Use it to pick locally fitting materials, step foundations into a slope, and align the entrance downhill. Do not echo the snapshot back.
 
 ## Worked example

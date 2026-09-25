@@ -74,6 +74,7 @@ still got the facings wrong, and nothing in the source revealed it.
 | Drawn | Derived |
 | --- | --- |
 | a run of stair glyphs | ascent direction from the diagonal the run forms, plus Minecraft's own inner/outer corner shapes |
+| a stair flight that starts from a floor and stops a full block below the floor it runs into | the floor block it meets becomes the top stair; the starting-floor test keeps roof slopes out |
 | a stair or slab with air below and mass above | `half=top` / `type=top` |
 | a line of logs, basalt, chains | `axis` from the direction of the run |
 | two stacked door glyphs | paired halves, `facing` toward whichever side an exterior flood fill reaches, hinge from the neighbours |

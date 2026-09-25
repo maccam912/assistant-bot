@@ -142,6 +142,8 @@ class Vxb2CompilerTest {
         // Roof stairs slope toward the ridge rather than defaulting to north.
         assertTrue(at(structure, 4, 4, 0).blockId().contains("facing=south"), at(structure, 4, 4, 0).blockId());
         assertTrue(at(structure, 4, 4, 6).blockId().contains("facing=north"), at(structure, 4, 4, 6).blockId());
+        // The slope meets a flat ridge a block above its top stair, but an eave is not a staircase.
+        assertEquals("minecraft:spruce_planks", at(structure, 4, 6, 2).blockId());
 
         // Vertical corner logs are recognised as pillars.
         assertEquals("minecraft:spruce_log[axis=y]", at(structure, 0, 1, 0).blockId());
@@ -341,6 +343,67 @@ class Vxb2CompilerTest {
         assertTrue(at(structure, 1, 1, 1).blockId().contains("facing=east"), at(structure, 1, 1, 1).blockId());
         assertTrue(at(structure, 2, 2, 1).blockId().contains("facing=east"), at(structure, 2, 2, 1).blockId());
         assertTrue(at(structure, 3, 3, 1).blockId().contains("facing=east"), at(structure, 3, 3, 1).blockId());
+    }
+
+    /** Ground floor at y=0, upper floor at y=4 with a stairwell over x=1..3, and a stair flight drawn up to it. */
+    private static String stairwell(String stairs, String upperStairRow) {
+        return """
+                VXB-2
+                size 6 6 3
+                pal
+                S stone
+                P oak_planks
+                ^ oak_stairs
+                end
+                plan y=0
+                SSSSSS
+                SSSSSS
+                SSSSSS
+                plan y=1..3 x=0..5 z=0
+                SSSSSS
+                """ + stairs + """
+                plan y=4
+                PPPPPP
+                """ + upperStairRow + "\n" + """
+                PPPPPP
+                """;
+    }
+
+    @Test
+    void staircaseThatStopsOneBlockShortIsExtendedIntoTheFloor() {
+        VxbCompiler.Compilation compilation = VxbCompiler.compile(stairwell("""
+                plan y=1 x=1 z=1
+                ^
+                plan y=2 x=2 z=1
+                ^
+                plan y=3 x=3 z=1
+                ^
+                """, "P...PP"));
+        BuildStructure structure = compilation.structure();
+        assertTrue(at(structure, 3, 3, 1).blockId().contains("facing=east"), at(structure, 3, 3, 1).blockId());
+        String landing = at(structure, 4, 4, 1).blockId();
+        assertTrue(landing.startsWith("minecraft:oak_stairs[") && landing.contains("facing=east")
+                && landing.contains("half=bottom"), landing);
+        assertEquals("minecraft:oak_planks", at(structure, 5, 4, 1).blockId());
+        assertTrue(compilation.diagnostics().getLlmReport().contains("stopped a full block below the floor at (4,4,1)"),
+                compilation.diagnostics().getLlmReport());
+    }
+
+    @Test
+    void staircaseThatReachesTheFloorLayerIsLeftAlone() {
+        VxbCompiler.Compilation compilation = VxbCompiler.compile(stairwell("""
+                plan y=1 x=1 z=1
+                ^
+                plan y=2 x=2 z=1
+                ^
+                plan y=3 x=3 z=1
+                ^
+                """, "P...^P"));
+        BuildStructure structure = compilation.structure();
+        assertTrue(at(structure, 4, 4, 1).blockId().contains("facing=east"), at(structure, 4, 4, 1).blockId());
+        assertEquals("minecraft:oak_planks", at(structure, 5, 4, 1).blockId());
+        assertFalse(compilation.diagnostics().getLlmReport().contains("stopped a full block below"),
+                compilation.diagnostics().getLlmReport());
     }
 
     @Test
