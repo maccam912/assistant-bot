@@ -80,7 +80,8 @@ still got the facings wrong, and nothing in the source revealed it.
 | two adjacent bed glyphs | head against the wall, foot away from it |
 | a torch with no floor under it | `wall_torch` facing away from its supporting wall |
 | a lantern under a ceiling | `hanging=true` |
-| ladders, trapdoors | the wall they touch |
+| trapdoors | the wall they touch |
+| a vertical run of ladders | one wall for the whole run: the side backing the most rungs, so a rung passing through a floor hole does not turn toward the floor |
 | furnaces, chests, lecterns, campfires | facing into the room rather than out of the building |
 
 Where a shape is genuinely ambiguous — a lone decorative stair, say — the palette

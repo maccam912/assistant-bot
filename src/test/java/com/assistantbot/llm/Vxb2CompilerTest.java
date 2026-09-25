@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
@@ -340,6 +341,100 @@ class Vxb2CompilerTest {
         assertTrue(at(structure, 1, 1, 1).blockId().contains("facing=east"), at(structure, 1, 1, 1).blockId());
         assertTrue(at(structure, 2, 2, 1).blockId().contains("facing=east"), at(structure, 2, 2, 1).blockId());
         assertTrue(at(structure, 3, 3, 1).blockId().contains("facing=east"), at(structure, 3, 3, 1).blockId());
+    }
+
+    @Test
+    void ladderKeepsItsWallWhereItClimbsThroughAHoleInTheFloor() {
+        // At y=3 the floor surrounds the top rung on every side. Inferred rung by
+        // rung, that rung hung on the north floor block and faced south while the
+        // rest of the ladder faced west off the east wall.
+        BuildStructure structure = BuildStructure.parse("""
+                VXB-2
+                size 3 4 3
+                pal
+                S stone
+                H ladder
+                end
+                plan y=0
+                SSS
+                SSS
+                SSS
+                plan y=1
+                ..S
+                .HS
+                ..S
+                plan y=2
+                ..S
+                .HS
+                ..S
+                plan y=3
+                SSS
+                SHS
+                SSS
+                """);
+        for (int y = 1; y <= 3; y++) {
+            assertEquals("minecraft:ladder[facing=west]", at(structure, 1, y, 1).blockId(), "rung at y=" + y);
+        }
+        assertTrue(structure.getFeatureGroups().stream().filter(g -> g.kind().equals("ladder"))
+                .allMatch(g -> g.requiredSupports().equals(List.of(new Cell(2, g.blocks().getFirst().y(), 1)))));
+    }
+
+    @Test
+    void ladderRungLeavesTheColumnWallOnlyWhereThatWallHasAGap() {
+        BuildStructure structure = BuildStructure.parse("""
+                VXB-2
+                size 3 4 3
+                pal
+                S stone
+                H ladder
+                end
+                plan y=0
+                SSS
+                SSS
+                SSS
+                plan y=1
+                ..S
+                .HS
+                ..S
+                plan y=2
+                .SS
+                .H.
+                ..S
+                plan y=3
+                ..S
+                .HS
+                ..S
+                """);
+        assertEquals("minecraft:ladder[facing=west]", at(structure, 1, 1, 1).blockId());
+        assertEquals("minecraft:ladder[facing=south]", at(structure, 1, 2, 1).blockId());
+        assertEquals("minecraft:ladder[facing=west]", at(structure, 1, 3, 1).blockId());
+        assertTrue(structure.getNotes().stream().anyMatch(n -> n.contains("Ladder at (1,2,1)")), structure.getNotes().toString());
+    }
+
+    @Test
+    void ladderFacingHintPicksTheWallInACorner() {
+        BuildStructure structure = BuildStructure.parse("""
+                VXB-2
+                size 3 3 3
+                pal
+                S stone
+                H ladder facing=west
+                end
+                plan y=0
+                SSS
+                SSS
+                SSS
+                plan y=1
+                SSS
+                .HS
+                ..S
+                plan y=2
+                SSS
+                .HS
+                ..S
+                """);
+        assertEquals("minecraft:ladder[facing=west]", at(structure, 1, 1, 1).blockId());
+        assertEquals("minecraft:ladder[facing=west]", at(structure, 1, 2, 1).blockId());
     }
 
     @Test

@@ -81,6 +81,7 @@ public final class Vxb2Inference {
             stairFacing.put(cell, hint.containsKey("up") ? direction(hint.get("up"), cell, notes) : inferAscent(grid, cell, notes));
             stairHalf.put(cell, half(hint, inferHalf(grid, cell)));
         }
+        Map<Cell, String> ladderWalls = resolveLadderWalls(grid, cellHints, notes);
 
         List<PlacementGroup> fixtures = new ArrayList<>();
         for (Cell cell : grid.cells()) {
@@ -124,7 +125,7 @@ public final class Vxb2Inference {
                 resolved.put(cell, state(blockId, props("hanging", String.valueOf(hanging))));
                 fixtures.add(fixture(++groupIndex, cell, resolved.get(cell), hanging ? above(cell) : below(cell)));
             } else if (path.equals("ladder")) {
-                String support = adjacentSolid(grid, cell);
+                String support = ladderWalls.get(cell);
                 if (support == null) {
                     resolved.put(cell, state(blockId, props("facing", "north")));
                     notes.add("Ladder at " + format(cell) + " has no wall beside it; defaulted to facing north.");
@@ -311,6 +312,69 @@ public final class Vxb2Inference {
             notes.add("The stair at " + format(cell) + " has nothing around it to slope toward, so it faces north. "
                     + "Give its palette symbol an 'up=' hint if that is wrong.");
             return "north";
+        }
+        return best;
+    }
+
+    /**
+     * Ladders are resolved a whole column at a time. Where a ladder climbs through
+     * a hole in a floor, the floor boxes that rung in on every side, and taking its
+     * first solid neighbour turned it sideways off the wall the rest of the ladder
+     * hangs on. The column instead settles on the wall that backs the most rungs,
+     * and a rung only leaves it where that wall has a gap it cannot hang from.
+     */
+    private static Map<Cell, String> resolveLadderWalls(Grid grid, Map<Cell, Map<String, String>> cellHints,
+                                                        List<String> notes) {
+        Map<Cell, String> walls = new HashMap<>();
+        Set<Cell> seen = new HashSet<>();
+        for (Cell cell : grid.cells()) {
+            if (seen.contains(cell) || !isLadder(grid.get(cell))) continue;
+            Cell bottom = cell;
+            while (isLadder(grid.get(below(bottom)))) bottom = below(bottom);
+            List<Cell> column = new ArrayList<>();
+            for (Cell rung = bottom; isLadder(grid.get(rung)); rung = above(rung)) column.add(rung);
+            seen.addAll(column);
+
+            // A facing= hint names the side the climber stands on, so the wall is behind it.
+            String wall = null;
+            for (Cell rung : column) {
+                String facing = cellHints.getOrDefault(rung, Map.of()).get("facing");
+                if (facing != null) {
+                    wall = opposite(direction(facing, rung, notes));
+                    break;
+                }
+            }
+            if (wall == null) wall = columnWall(grid, column);
+            for (Cell rung : column) {
+                String support = wall != null && grid.isSolid(step(rung, wall)) ? wall : adjacentSolid(grid, rung);
+                if (support == null) continue;
+                if (wall != null && !support.equals(wall)) {
+                    notes.add("Ladder at " + format(rung) + " has no " + wall + " wall behind it like the rest of "
+                            + "its column, so it hangs on the " + support + " side instead.");
+                }
+                walls.put(rung, support);
+            }
+        }
+        return walls;
+    }
+
+    /** The side backing the most rungs; ties go to the side with room in front of it to climb. */
+    private static String columnWall(Grid grid, List<Cell> column) {
+        String best = null;
+        int bestBacked = 0;
+        int bestOpen = 0;
+        for (String direction : HORIZONTAL) {
+            int backed = 0;
+            int open = 0;
+            for (Cell rung : column) {
+                if (grid.isSolid(step(rung, direction))) backed++;
+                if (!grid.isSolid(step(rung, opposite(direction)))) open++;
+            }
+            if (backed > bestBacked || (backed == bestBacked && backed > 0 && open > bestOpen)) {
+                best = direction;
+                bestBacked = backed;
+                bestOpen = open;
+            }
         }
         return best;
     }
@@ -517,6 +581,10 @@ public final class Vxb2Inference {
 
     private static boolean isStairs(String blockId) {
         return blockId != null && path(blockId).endsWith("_stairs");
+    }
+
+    private static boolean isLadder(String blockId) {
+        return blockId != null && path(blockId).equals("ladder") && !pinned(blockId);
     }
 
     private static boolean isDoor(String blockId) {
