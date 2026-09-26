@@ -81,6 +81,8 @@ public final class Vxb2Inference {
             stairFacing.put(cell, hint.containsKey("up") ? direction(hint.get("up"), cell, notes) : inferAscent(grid, cell, notes));
             stairHalf.put(cell, half(hint, inferHalf(grid, cell)));
         }
+        extendShortStaircases(grid, base, stairFacing, stairHalf, notes);
+        Map<Cell, String> ladderWalls = resolveLadderWalls(grid, cellHints, notes);
 
         List<PlacementGroup> fixtures = new ArrayList<>();
         for (Cell cell : grid.cells()) {
@@ -124,7 +126,7 @@ public final class Vxb2Inference {
                 resolved.put(cell, state(blockId, props("hanging", String.valueOf(hanging))));
                 fixtures.add(fixture(++groupIndex, cell, resolved.get(cell), hanging ? above(cell) : below(cell)));
             } else if (path.equals("ladder")) {
-                String support = adjacentSolid(grid, cell);
+                String support = ladderWalls.get(cell);
                 if (support == null) {
                     resolved.put(cell, state(blockId, props("facing", "north")));
                     notes.add("Ladder at " + format(cell) + " has no wall beside it; defaulted to facing north.");
@@ -311,6 +313,125 @@ public final class Vxb2Inference {
             notes.add("The stair at " + format(cell) + " has nothing around it to slope toward, so it faces north. "
                     + "Give its palette symbol an 'up=' hint if that is wrong.");
             return "north";
+        }
+        return best;
+    }
+
+    /**
+     * A staircase's top stair belongs in the layer of the floor it serves, and
+     * models regularly stop one step short, leaving the flight a full block below
+     * the floor it runs into. A flight that is entered from a floor and runs
+     * straight at a floor continuing ahead with room above it is extended by
+     * turning the floor block it meets into one more stair. The entry test is what
+     * keeps roofs out: an eave overhangs open air, where a staircase starts from
+     * somewhere a player can stand.
+     */
+    private static void extendShortStaircases(Grid grid, Map<Cell, String> base, Map<Cell, String> facings,
+                                              Map<Cell, String> halves, List<String> notes) {
+        Map<Cell, Cell> landings = new LinkedHashMap<>(); // floor block -> the top stair that runs into it
+        for (Cell top : grid.cells()) {
+            String facing = facings.get(top);
+            if (facing == null || !halves.get(top).equals("bottom")) continue;
+            Cell landing = step(above(top), facing);
+            if (landings.containsKey(landing) || !isPlainFloor(grid, landing)) continue;
+            if (grid.isSolid(above(top)) || grid.isSolid(above(above(top)))) continue;
+            if (grid.get(above(landing)) != null || grid.get(above(above(landing))) != null) continue;
+            Cell beyond = step(landing, facing);
+            if (!grid.isSolid(beyond) || grid.isSolid(above(beyond)) || grid.isSolid(above(above(beyond)))) continue;
+
+            Cell bottom = top;
+            Cell lower = below(step(bottom, opposite(facing)));
+            while (facing.equals(facings.get(lower)) && halves.get(lower).equals("bottom")) {
+                bottom = lower;
+                lower = below(step(bottom, opposite(facing)));
+            }
+            // y=0 sits on the world's ground, so an approach at that level always has footing.
+            Cell approach = step(bottom, opposite(facing));
+            if (grid.isSolid(approach) || grid.isSolid(above(approach))) continue;
+            if (approach.y() > 0 && !grid.isSolid(below(approach))) continue;
+            landings.put(landing, top);
+        }
+        for (Map.Entry<Cell, Cell> entry : landings.entrySet()) {
+            Cell landing = entry.getKey();
+            Cell top = entry.getValue();
+            String facing = facings.get(top);
+            base.put(landing, base.get(top));
+            facings.put(landing, facing);
+            halves.put(landing, "bottom");
+            notes.add("The stairs climbing " + facing + " to " + format(top) + " stopped a full block below the floor at "
+                    + format(landing) + ", so that floor block became one more stair. A staircase's top stair belongs in "
+                    + "the upper floor's own layer.");
+        }
+    }
+
+    /** A plain block a staircase can be cut into: not already a step, a railing, a fixture or a pinned state. */
+    private static boolean isPlainFloor(Grid grid, Cell cell) {
+        String blockId = grid.get(cell);
+        if (!grid.isSolid(cell) || pinned(blockId) || isStairs(blockId)) return false;
+        String path = path(blockId);
+        return !path.endsWith("_slab") && !path.endsWith("_fence") && !path.endsWith("_fence_gate")
+                && !path.endsWith("_wall") && !path.endsWith("_trapdoor") && !FURNITURE.contains(path);
+    }
+
+    /**
+     * Ladders are resolved a whole column at a time. Where a ladder climbs through
+     * a hole in a floor, the floor boxes that rung in on every side, and taking its
+     * first solid neighbour turned it sideways off the wall the rest of the ladder
+     * hangs on. The column instead settles on the wall that backs the most rungs,
+     * and a rung only leaves it where that wall has a gap it cannot hang from.
+     */
+    private static Map<Cell, String> resolveLadderWalls(Grid grid, Map<Cell, Map<String, String>> cellHints,
+                                                        List<String> notes) {
+        Map<Cell, String> walls = new HashMap<>();
+        Set<Cell> seen = new HashSet<>();
+        for (Cell cell : grid.cells()) {
+            if (seen.contains(cell) || !isLadder(grid.get(cell))) continue;
+            Cell bottom = cell;
+            while (isLadder(grid.get(below(bottom)))) bottom = below(bottom);
+            List<Cell> column = new ArrayList<>();
+            for (Cell rung = bottom; isLadder(grid.get(rung)); rung = above(rung)) column.add(rung);
+            seen.addAll(column);
+
+            // A facing= hint names the side the climber stands on, so the wall is behind it.
+            String wall = null;
+            for (Cell rung : column) {
+                String facing = cellHints.getOrDefault(rung, Map.of()).get("facing");
+                if (facing != null) {
+                    wall = opposite(direction(facing, rung, notes));
+                    break;
+                }
+            }
+            if (wall == null) wall = columnWall(grid, column);
+            for (Cell rung : column) {
+                String support = wall != null && grid.isSolid(step(rung, wall)) ? wall : adjacentSolid(grid, rung);
+                if (support == null) continue;
+                if (wall != null && !support.equals(wall)) {
+                    notes.add("Ladder at " + format(rung) + " has no " + wall + " wall behind it like the rest of "
+                            + "its column, so it hangs on the " + support + " side instead.");
+                }
+                walls.put(rung, support);
+            }
+        }
+        return walls;
+    }
+
+    /** The side backing the most rungs; ties go to the side with room in front of it to climb. */
+    private static String columnWall(Grid grid, List<Cell> column) {
+        String best = null;
+        int bestBacked = 0;
+        int bestOpen = 0;
+        for (String direction : HORIZONTAL) {
+            int backed = 0;
+            int open = 0;
+            for (Cell rung : column) {
+                if (grid.isSolid(step(rung, direction))) backed++;
+                if (!grid.isSolid(step(rung, opposite(direction)))) open++;
+            }
+            if (backed > bestBacked || (backed == bestBacked && backed > 0 && open > bestOpen)) {
+                best = direction;
+                bestBacked = backed;
+                bestOpen = open;
+            }
         }
         return best;
     }
@@ -517,6 +638,10 @@ public final class Vxb2Inference {
 
     private static boolean isStairs(String blockId) {
         return blockId != null && path(blockId).endsWith("_stairs");
+    }
+
+    private static boolean isLadder(String blockId) {
+        return blockId != null && path(blockId).equals("ladder") && !pinned(blockId);
     }
 
     private static boolean isDoor(String blockId) {

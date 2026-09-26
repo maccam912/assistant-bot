@@ -74,13 +74,15 @@ still got the facings wrong, and nothing in the source revealed it.
 | Drawn | Derived |
 | --- | --- |
 | a run of stair glyphs | ascent direction from the diagonal the run forms, plus Minecraft's own inner/outer corner shapes |
+| a stair flight that starts from a floor and stops a full block below the floor it runs into | the floor block it meets becomes the top stair; the starting-floor test keeps roof slopes out |
 | a stair or slab with air below and mass above | `half=top` / `type=top` |
 | a line of logs, basalt, chains | `axis` from the direction of the run |
 | two stacked door glyphs | paired halves, `facing` toward whichever side an exterior flood fill reaches, hinge from the neighbours |
 | two adjacent bed glyphs | head against the wall, foot away from it |
 | a torch with no floor under it | `wall_torch` facing away from its supporting wall |
 | a lantern under a ceiling | `hanging=true` |
-| ladders, trapdoors | the wall they touch |
+| trapdoors | the wall they touch |
+| a vertical run of ladders | one wall for the whole run: the side backing the most rungs, so a rung passing through a floor hole does not turn toward the floor |
 | furnaces, chests, lecterns, campfires | facing into the room rather than out of the building |
 
 Where a shape is genuinely ambiguous — a lone decorative stair, say — the palette

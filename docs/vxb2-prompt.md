@@ -136,7 +136,7 @@ Draw the shape; these follow from it:
 - **Logs, pillars, basalt, chains** take the axis of the run you drew them in: a vertical stack becomes an upright pillar, a horizontal line becomes a beam.
 - **Doors** are drawn as two stacked glyphs. The compiler pairs them, points them at whichever side is genuinely outdoors, and picks the hinge.
 - **Beds** are two adjacent glyphs; the head goes against the wall.
-- **Torches** become wall torches when there is no floor under them and a wall beside them. **Lanterns** hang when drawn under a ceiling. **Ladders** and **trapdoors** take the wall they touch.
+- **Torches** become wall torches when there is no floor under them and a wall beside them. **Lanterns** hang when drawn under a ceiling. **Trapdoors** take the wall they touch. A **ladder** column hangs on the one wall behind most of its rungs, so the rung inside a hole in the floor stays on that wall too.
 - **Furniture** (furnaces, chests, lecterns, campfires) faces into the room rather than out of the building.
 
 If a shape is genuinely ambiguous, pin it on the palette symbol instead of writing a raw state:
@@ -155,7 +155,9 @@ Supported hints: `up=`, `axis=`, `half=`/`top`, `facing=`, `outside=`, `hanging=
 - Break up flat walls with a second material — a stone base course, log corner posts, a plank band under the eaves.
 - Use stairs and slabs for roofs, eaves, awnings and steps. A roof of full cubes is the main thing that reads as machine-made.
 - Windows want two or more panes side by side; single panes read as holes.
-- Leave two blocks of headroom, give every enclosed room a door, and connect floors with stairs or a ladder and a hole in the floor above.
+- Leave two blocks of headroom, give every enclosed room a door, and connect floors with stairs or a ladder.
+- A staircase climbs one level per stair, and its top stair sits in the upper floor's own layer. From a floor drawn at y=0 to one drawn at y=4 that is stairs at y=1, 2, 3 and 4: the y=4 stair replaces a floor block in `plan y=4`, and that floor needs a hole over the stairs beneath it for headroom. Stopping at y=3 leaves a full-block step up at the top.
+- Draw a ladder against one wall in every cell from the lower floor up to and including its one-block hole in the floor above.
 - The terrain snapshot in the user message gives relative surface heights, materials and occupancy around the marker. Use it to pick locally fitting materials, step foundations into a slope, and align the entrance downhill. Do not echo the snapshot back.
 
 ## Worked example
